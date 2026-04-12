@@ -5,7 +5,6 @@ from datetime import datetime, date
 from zhdate import ZhDate
 import sys
 import os
-import json  # 新增：用于安全解析配置（可选优化）
  
  
 def get_color():
@@ -56,7 +55,7 @@ def get_weather(region):
         # 修复JSON解析报错：添加容错
         try:
             region_data = response.json()
-        except json.JSONDecodeError:
+        except ValueError:  # JSON解析失败会抛ValueError，兼容不同Python版本
             print("和风天气API返回非JSON格式数据，请检查网络或API key")
             os.system("pause")
             sys.exit(1)
@@ -104,7 +103,7 @@ def get_weather(region):
         # 修复JSON解析报错
         try:
             weather_data = response.json()
-        except json.JSONDecodeError:
+        except ValueError:
             print("天气接口返回非JSON格式数据，请稍后重试")
             os.system("pause")
             sys.exit(1)
@@ -317,21 +316,15 @@ def send_message(to_user, access_token, region_name, weather, temp, wind_dir, no
 if __name__ == "__main__":
     try:
         with open("config.txt", encoding="utf-8") as f:
-            # 优化：替换eval（安全风险），改用json解析（需确保config.txt是标准JSON格式）
-            # 如果你的config.txt是Python字典格式（如单引号），保留eval，仅添加异常捕获
+            # 核心改动：改用eval解析（兼容Python字典格式，单引号）
             try:
-                config = json.load(f)  # 推荐：改用JSON解析
-                # config = eval(f.read())  # 兼容旧格式：保留eval（注释掉上面一行，打开这行）
-            except json.JSONDecodeError:
-                print("配置文件格式错误：请确保config.txt是标准JSON格式（使用双引号）")
+                config = eval(f.read())
+            except SyntaxError:
+                print("配置文件格式错误：请检查config.txt是否为合法的Python字典格式（如单引号、逗号等）")
                 os.system("pause")
                 sys.exit(1)
     except FileNotFoundError:
         print("推送消息失败，请检查config.txt文件是否与程序位于同一路径")
-        os.system("pause")
-        sys.exit(1)
-    except SyntaxError:
-        print("推送消息失败，请检查配置文件格式是否正确")
         os.system("pause")
         sys.exit(1)
     except Exception as e:
