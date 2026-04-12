@@ -8,14 +8,14 @@ import os
  
  
 def get_color():
-    """获取随机16进制颜色码（原有功能）"""
+    """生成随机16进制颜色码"""
     get_colors = lambda n: list(map(lambda i: "#" + "%06x" % random.randint(0, 0xFFFFFF), range(n)))
     color_list = get_colors(100)
     return random.choice(color_list)
  
  
 def get_access_token():
-    """获取微信公众号access_token（原有功能）"""
+    """获取微信公众号access_token"""
     app_id = config["app_id"]
     app_secret = config["app_secret"]
     post_url = (
@@ -79,7 +79,7 @@ def get_weather(region):
     # 初始化变量（原有 + 新增）
     weather = "多云"   # 原有
     temp = "25℃"       # 原有
-    wind_dir = "南风"  # 原有
+    wind_dir = "南风"  # 原有（对应wind_direction）
     min_temp = "18℃"   # 新增：最低温
     max_temp = "32℃"   # 新增：最高温
     sunrise = "06:00"  # 新增：日出
@@ -93,7 +93,7 @@ def get_weather(region):
         if now_data.get("code") == "200":
             weather = now_data["now"]["text"]
             temp = f"{now_data['now']['temp']}℃"
-            wind_dir = now_data["now"]["windDir"]
+            wind_dir = now_data["now"]["windDir"]  # 风向数据（给wind_direction用）
     except Exception as e:
         print(f"获取实时天气失败：{str(e)}")
  
@@ -176,7 +176,7 @@ def get_ciba():
  
  
 def send_message(to_user, access_token, region, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
-    """推送消息（原有功能 + 新增4个字段）"""
+    """推送消息（新增city.DATA和wind_direction.DATA）"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
@@ -193,7 +193,7 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         os.system("pause")
         sys.exit(1)
  
-    # 组装模板数据（原有字段 + 新增4个字段）
+    # 组装模板数据（核心修改：新增city和wind_direction两个变量）
     data = {
         "touser": to_user,
         "template_id": config["template_id"],
@@ -202,14 +202,18 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         "data": {
             # 原有字段
             "date": {"value": date_str, "color": get_color()},
-            "region": {"value": region, "color": get_color()},
+            "region": {"value": region, "color": get_color()},  # 保留原有region，兼容旧模板
             "weather": {"value": weather, "color": get_color()},
             "temp": {"value": temp, "color": get_color()},
-            "wind_dir": {"value": wind_dir, "color": get_color()},
+            "wind_dir": {"value": wind_dir, "color": get_color()},  # 保留原有wind_dir，兼容旧模板
             "love_day": {"value": love_days, "color": get_color()},
             "note_en": {"value": note_en, "color": get_color()},
             "note_ch": {"value": note_ch, "color": get_color()},
-            # 新增字段
+            # 新增字段：city（和region值一致，适配模板里的city.DATA）
+            "city": {"value": region, "color": get_color()},
+            # 新增字段：wind_direction（和wind_dir值一致，适配模板里的wind_direction.DATA）
+            "wind_direction": {"value": wind_dir, "color": get_color()},
+            # 新增的温度/日出日落字段
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
