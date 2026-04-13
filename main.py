@@ -202,12 +202,12 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
     except:
         pass
 
-    # 生日2
+    # 生日2（已修复缺失的 = 号）
     try:
         if "birthday2" in config:
             b2_days = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
             b2_text = f"今天{config['birthday2']['name']}生日🎂！" if b2_days == "0" else f"距离{config['birthday2']['name']}生日还有{b2_days}天"
-            data["data"]["birthday2"] {"value": b2_text, "color": get_color()}
+            data["data"]["birthday2"] = {"value": b2_text, "color": get_color()}
     except:
         pass
 
