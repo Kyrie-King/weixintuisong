@@ -98,7 +98,7 @@ def get_zaoan():
     免费、稳定、每天一句温暖早安
     """
     # 把这里换成你自己的 TianAPI Key
-    API_KEY = "你复制的ApiKey"
+    API_KEY = "769e688a2a945817a2b8140e853b78eb"
 
     url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
     try:
