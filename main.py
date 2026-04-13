@@ -161,10 +161,10 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
     # 修复重复「距离」，统一格式
     if "birthday1" in config:
         b1 = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday1"] = {"value": f"距离{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
+        data["data"]["birthday1"] = {"value": f"{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
     if "birthday2" in config:
         b2 = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday2"] = {"value": f"距离{config['birthday2']['name']}生日还有{b2}天" , "color": get_color()}
+        data["data"]["birthday2"] = {"value": f"{config['birthday2']['name']}生日还有{b2}天" , "color": get_color()}
 
     # 发送请求
     try:
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
     # 接收拆分后的两句早安心语
-    note_ch1, note_ch2 = get_zaoan()
+    note_ch1,note_ch2 = get_zaoan()
     note_en = "Good morning"
 
     # 循环推送（过滤空ID）
