@@ -99,27 +99,25 @@ def get_ciba():
         return res["note"], res["content"]
     except:
         return "每天都有新的希望", "Keep going"
-
-# ========================
-# 🔥 方案二：拆分两句返回
-# ========================
 def get_zaoan():
+    """
+    天聚地合 早安心语API
+    免费、稳定、每天一句温暖早安
+    """
+    # 把这里换成你自己的 TianAPI Key
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
+
     url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
     try:
         res = requests.get(url, timeout=8)
         data = res.json()
         if data.get("code") == 200:
-            content = data["result"]["content"]
-            # 自动拆成 前20字 + 剩下内容
-            line1 = content[:20]
-            line2 = content[20:]
-            return line1, line2  # 返回两句
+            return data["result"]["content"]
     except:
         pass
-    return "早安", "新的一天也要元气满满～"
+    return "早安，新的一天也要元气满满～"
 
-def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en):
+def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
     """推送消息（核心修复：定义today再赋值week）"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     
@@ -144,21 +142,15 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
         "topcolor": "#FF0000",
         "data": {
             "date": {"value": date_str, "color": get_color()},
-            "city": {"value": "临沂市", "color": get_color()},
+            "city": {"value": "临沂市", "color": get_color()},  # 强制显示城市
             "region": {"value": "临沂市", "color": get_color()},
             "weather": {"value": weather, "color": get_color()},
             "temp": {"value": temp, "color": get_color()},
-            "wind_dir": {"value": wind_dir, "color": get_color()},
-            "wind_direction": {"value": wind_dir, "color": get_color()},
+            "wind_dir": {"value": wind_dir, "color": get_color()},  # 风向推送
+            "wind_direction": {"value": wind_dir, "color": get_color()}, # 双保险
             "love_day": {"value": love_days, "color": get_color()},
             "note_en": {"value": note_en, "color": get_color()},
-
-            # ========================
-            # 🔥 拆成两行显示
-            # ========================
-            "note_ch": {"value": note_ch1, "color": get_color()},
-            "note_ch2": {"value": note_ch2, "color": get_color()},
-
+            "note_ch": {"value": note_ch, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
@@ -169,10 +161,10 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
     # 生日推送
     if "birthday1" in config:
         b1 = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday1"] = {"value": f"🎂 {config['birthday1']['name']} : {'今天生日' if b1=='0' else f'还有{b1}天'}" , "color": get_color()}
+        data["data"]["birthday1"] = {"value": f"距离{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
     if "birthday2" in config:
         b2 = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday2"] = {"value": f"🎂 {config['birthday2']['name']} : {'今天生日' if b1=='0' else f'还有{b2}天'}" , "color": get_color()}
+        data["data"]["birthday2"] = {"value": f"距离{config['birthday2']['name']}生日还有{b2}天" , "color": get_color()}
 
     # 发送请求
     try:
@@ -197,14 +189,10 @@ if __name__ == "__main__":
     # 核心流程
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
-    
-    # ========================
-    # 🔥 接收两句早安文案
-    # ========================
-    note_ch1, note_ch2 = get_zaoan()
+    note_ch = get_zaoan()
     note_en = "Good morning"
 
     # 循环推送（过滤空ID）
     for user in config["user"]:
         if user and user.strip():
-            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en)
+            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
