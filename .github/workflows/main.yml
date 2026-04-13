@@ -5,13 +5,14 @@ on:
   schedule:
     # 北京时间每天16:00（下午4点） = UTC时间08:00
     # cron格式：分 时 日 月 周
-    - cron: '0 8 * * *'
+    - cron: '15 8 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai  # 强制设置时区为上海，避免时间误差
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # 解决Node.js 20警告
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
