@@ -29,9 +29,9 @@ def get_weather(region):
     url = f"http://t.weather.sojson.com/api/weather/city/{city_code}"
     
     weather = "晴"
-    real_temp = "23"
-    min_temp = "15"
-    max_temp = "28"
+    real_temp = "23"   # 实时温度
+    min_temp = "11"    # 最低温
+    max_temp = "25"    # 最高温
     wind_dir = "南风"
     sunrise = "05:45"
     sunset = "18:32"
@@ -42,15 +42,18 @@ def get_weather(region):
             data = res.json()
             if data.get("status") == 200:
                 today_forecast = data["data"]["forecast"][0]
-                real_temp = data["data"]["wendu"]
+                # 🔥 核心：正确获取实时温度、最低温、最高温
+                real_temp = data["data"]["wendu"]  # 实时温度
                 weather = today_forecast.get("type", "晴")
                 wind_dir = today_forecast.get("fx", "南风")
-                min_temp = today_forecast.get("low", "15").replace("低温 ", "").replace("℃", "")
-                max_temp = today_forecast.get("high", "28").replace("高温 ", "").replace("℃", "")
+                # 处理最低温/最高温，去掉℃符号
+                min_temp = today_forecast.get("low", "11").replace("低温 ", "").replace("℃", "")
+                max_temp = today_forecast.get("high", "25").replace("高温 ", "").replace("℃", "")
                 return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
         except Exception as e:
             print(f"⚠️ 天气接口重试 {i+1}/3: {e}")
             sleep(2)
+    print(f"⚠️ 3次重试后天气接口异常，使用默认值")
     return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
 
 def get_birthday(birthday_str, year, today):
@@ -106,6 +109,7 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
     b2 = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
     birthday2_text = f"{config['birthday2']['name']}生日还有{b2}天"
 
+    # 🔥 核心：给所有字段传正确的值，包括real_temp
     data = {
         "touser": to_user,
         "template_id": config["template_id"],
@@ -114,9 +118,10 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
         "data": {
             "date": {"value": date_str, "color": get_color()},
             "city": {"value": "临沂市", "color": get_color()},
-            "weather": {"value": f"{weather} {real_temp}℃", "color": get_color()},
+            "weather": {"value": weather, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
+            "real_temp": {"value": real_temp, "color": get_color()},  # ✅ 给real_temp传值！
             "wind_direction": {"value": wind_dir, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
             "sunset": {"value": sunset, "color": get_color()},
@@ -135,7 +140,7 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             res = requests.post(send_url, json=data, timeout=30)
             if res.status_code == 200 and res.json()["errcode"] == 0:
                 print(f"✅ 推送成功！")
-                print(f"📊 实时{real_temp}℃ 最低{min_temp}℃ 最高{max_temp}℃")
+                print(f"📊 实时{real_temp}℃ | 最低{min_temp}℃ | 最高{max_temp}℃")
                 return
         except Exception as e:
             print(f"⚠️ 推送重试 {i+1}/3: {e}")
