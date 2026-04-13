@@ -52,15 +52,12 @@ def get_weather(region):
             min_temp = low_temp
             max_temp = high_temp
 
-        # ==========================
-        # 🔥 精准日出日落（北京时间）
-        # ==========================
+        # 精准日出日落（北京时间）
         try:
             from datetime import datetime, timedelta
             resp = requests.get("https://api.sunrise-sunset.org/json?lat=35.0519&lng=118.3471&date=today&formatted=0", timeout=5)
             sun_data = resp.json()
             if sun_data["status"] == "OK":
-                # 转 UTC+8 北京时间
                 rise_utc = datetime.fromisoformat(sun_data["results"]["sunrise"].replace("Z", ""))
                 set_utc = datetime.fromisoformat(sun_data["results"]["sunset"].replace("Z", ""))
                 rise_cn = rise_utc + timedelta(hours=8)
@@ -99,29 +96,30 @@ def get_ciba():
         return res["note"], res["content"]
     except:
         return "每天都有新的希望", "Keep going"
-def get_zaoan():
-    """
-    天聚地合 早安心语API
-    免费、稳定、每天一句温暖早安
-    """
-    # 把这里换成你自己的 TianAPI Key
-    API_KEY = "769e688a2a945817a2b8140e853b78eb"
 
+# ========================
+# 🔥 双字段拆分长句：返回两句，分别对应两个模板字段
+# ========================
+def get_zaoan():
+    API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
     try:
         res = requests.get(url, timeout=8)
         data = res.json()
         if data.get("code") == 200:
-            return data["result"]["content"]
+            content = data["result"]["content"]
+            # 按20字拆分，保证每句都在微信单行长度内
+            line1 = content[:20]
+            line2 = content[20:]
+            return line1, line2
     except:
         pass
-    return "早安，新的一天也要元气满满～"
+    return "早安，新的一天也要元气满满～", ""
 
-def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
-    """推送消息（核心修复：定义today再赋值week）"""
+def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en):
+    """推送消息"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     
-    # 🔥 修复点：先定义today，再用weekday()
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
     week_list = ["周日","周一","周二","周三","周四","周五","周六"]
     week = week_list[today.weekday()]
@@ -142,15 +140,17 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
         "topcolor": "#FF0000",
         "data": {
             "date": {"value": date_str, "color": get_color()},
-            "city": {"value": "临沂市", "color": get_color()},  # 强制显示城市
+            "city": {"value": "临沂市", "color": get_color()},
             "region": {"value": "临沂市", "color": get_color()},
             "weather": {"value": weather, "color": get_color()},
             "temp": {"value": temp, "color": get_color()},
-            "wind_dir": {"value": wind_dir, "color": get_color()},  # 风向推送
-            "wind_direction": {"value": wind_dir, "color": get_color()}, # 双保险
+            "wind_dir": {"value": wind_dir, "color": get_color()},
+            "wind_direction": {"value": wind_dir, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
             "note_en": {"value": note_en, "color": get_color()},
-            "note_ch": {"value": note_ch, "color": get_color()},
+            # 双字段拆分长句，分别对应模板的两个「每日一句」字段
+            "note_ch": {"value": note_ch1, "color": get_color()},
+            "note_ch2": {"value": note_ch2, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
@@ -158,7 +158,7 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
         }
     }
 
-    # 生日推送
+    # 修复重复「距离」，统一格式
     if "birthday1" in config:
         b1 = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
         data["data"]["birthday1"] = {"value": f"距离{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
@@ -189,10 +189,11 @@ if __name__ == "__main__":
     # 核心流程
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
-    note_ch = get_zaoan()
+    # 接收拆分后的两句早安心语
+    note_ch1, note_ch2 = get_zaoan()
     note_en = "Good morning"
 
     # 循环推送（过滤空ID）
     for user in config["user"]:
         if user and user.strip():
-            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
+            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en)
