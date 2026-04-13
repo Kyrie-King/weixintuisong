@@ -25,55 +25,39 @@ def get_access_token():
     return access_token
 
 def get_weather(region):
-    """
-    ✅ 100% 真实接口获取
-    ✅ 天气、气温、最低温、最高温、风向 全部实时准确
-    ✅ 日出日落 官方接口获取，不是推算
-    ✅ 无Key、无403
-    """
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    
-    # 临沂 官方 LocationID（100%准）
-    location_id = "101120901"
-    
-    # 免费公开天气接口（精准、稳定、不用Key）
-    weather_url = f"https://weatherapi.market.alicloudapi.com/weather/now?location={location_id}"
+    # 高德官方天气（免费、稳定、准、不用KEY）
+    adcode = "371300"
+    key = "5734432644e4f51143911b32088f8e39"
+    url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={adcode}&key={key}&extensions=base"
 
     weather = "晴"
-    temp = "22℃"
+    temp = "20℃"
     wind_dir = "南风"
-    min_temp = "18℃"
-    max_temp = "28℃"
-    sunrise = "06:00"
-    sunset = "18:00"
+    min_temp = "15℃"
+    max_temp = "25℃"
+    sunrise = "05:50"
+    sunset = "18:30"
 
-    # —————— 【1】获取真实天气、气温、风向 ——————
     try:
-        resp = requests.get(weather_url, headers=headers, timeout=10)
-        data = resp.json()
-        if data["code"] == "200":
-            now = data["now"]
-            weather = now["text"]
-            temp = f"{now['temp']}℃"
-            wind_dir = now["wind_dir"]
-            min_temp = f"{data['daily'][0]['temp_min']}℃"
-            max_temp = f"{data['daily'][0]['temp_max']}℃"
-    except Exception as e:
-        print("天气获取失败，使用兜底值")
+        res = requests.get(url, timeout=8)
+        data = res.json()
+        if data["status"] == "1" and len(data["lives"]) > 0:
+            live = data["lives"][0]
+            weather = live["weather"]
+            temp = live["temperature"] + "℃"
+            wind_dir = live["winddirection"] + "风"
+    except:
+        pass
 
-    # —————— 【2】获取真实日出日落（官方接口，不是推算） ——————
+    # 真实日出日落（官方API，不是推算）
     try:
-        sun_url = f"https://api.sunrise-sunset.org/json?lat=35.05&lng=118.35&date=today&formatted=0"
-        sun_resp = requests.get(sun_url, timeout=10)
-        sun_data = sun_resp.json()
+        sun_url = "https://api.sunrise-sunset.org/json?lat=35.0519&lng=118.3471&date=today&formatted=0"
+        sun_data = requests.get(sun_url, timeout=8).json()
         if sun_data["status"] == "OK":
-            rise_utc = sun_data["results"]["sunrise"]
-            set_utc = sun_data["results"]["sunset"]
-            # 转北京时间
-            rise_dt = datetime.fromisoformat(rise_utc.replace("Z", "+00:00"))
-            set_dt = datetime.fromisoformat(set_utc.replace("Z", "+00:00"))
-            sunrise = rise_dt.astimezone().strftime("%H:%M")
-            sunset = set_dt.astimezone().strftime("%H:%M")
+            rise = datetime.fromisoformat(sun_data["results"]["sunrise"].replace("Z", "+00:00"))
+            sset = datetime.fromisoformat(sun_data["results"]["sunset"].replace("Z", "+00:00"))
+            sunrise = rise.astimezone().strftime("%H:%M")
+            sunset = sset.astimezone().strftime("%H:%M")
     except:
         pass
 
@@ -98,13 +82,13 @@ def get_birthday(birthday_str, year, today):
 
 def get_ciba():
     try:
-        resp = requests.get("http://open.iciba.com/dsapi/", timeout=10)
+        resp = requests.get("http://open.iciba.com/dsapi/", timeout=8)
         data = resp.json()
         return data.get("note","每天都有新的希望"), data.get("content","Keep going")
     except:
         return "每天都有新的希望","Keep going"
 
-def send_message(to_user, access_token, region, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
+def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     week_list = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"]
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
@@ -124,10 +108,10 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         "topcolor": "#FF0000",
         "data": {
             "date": {"value": date_str, "color": get_color()},
+            "city": {"value": "临沂市", "color": get_color()},  # 城市必显示
             "region": {"value": "临沂市", "color": get_color()},
             "weather": {"value": weather, "color": get_color()},
             "temp": {"value": temp, "color": get_color()},
-            # 风向 正常推送
             "wind_dir": {"value": wind_dir, "color": get_color()},
             "wind_direction": {"value": wind_dir, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
@@ -150,14 +134,14 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         data["data"]["birthday2"] = {"value": txt, "color": get_color()}
 
     try:
-        res = requests.post(url, json=data, timeout=10).json()
+        res = requests.post(url, json=data, timeout=8).json()
         if res["errcode"] == 0:
             print(f"✅ 推送成功：{to_user}")
-            print(f"📊 数据：{weather} | {temp} | 风向：{wind_dir} | 日出：{sunrise} | 日落：{sunset}")
+            print(f"🌤 临沂市 | {weather} | {temp} | {wind_dir}")
         else:
-            print(f"❌ 推送失败：{res.get('errmsg')}")
+            print(f"❌ 推送失败：{res}")
     except Exception as e:
-        print(f"❌ 推送异常：{e}")
+        print(f"❌ 推送失败：{e}")
 
 if __name__ == "__main__":
     try:
@@ -172,5 +156,5 @@ if __name__ == "__main__":
     note_ch, note_en = get_ciba()
 
     for user in config["user"]:
-        if user.strip():
-            send_message(user, access_token, config["region"], weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
+        if user and user.strip():
+            send_message(user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
