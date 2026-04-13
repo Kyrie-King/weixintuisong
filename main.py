@@ -166,7 +166,7 @@ def get_daily_sentence():
     try:
         # 👇 完全复制你给的示例代码逻辑
         conn = http.client.HTTPSConnection('apis.tianapi.com')
-        params = urllib.parse.urlencode({'key': 769e688a2a945817a2b8140e853b78eb})
+        params = urllib.parse.urlencode({'key':'769e688a2a945817a2b8140e853b78eb'})
         headers = {'Content-type': 'application/x-www-form-urlencoded'}
         conn.request('POST', '/zaoan/index', params, headers)
         tianapi = conn.getresponse()
