@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   schedule:
     # 北京时间每天13:30运行 → UTC时间05:30（分 时 日 月 周）
-    - cron: '45 5 * * *'
+    - cron: '30 6 * * *'
 
 jobs:
   build:
