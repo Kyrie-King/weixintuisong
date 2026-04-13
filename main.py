@@ -17,8 +17,8 @@ def get_access_token():
         app_secret = config["app_secret"]
         url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
         return requests.get(url, timeout=10).json()["access_token"]
-    except:
-        print("❌ 获取access_token失败")
+    except Exception as e:
+        print(f"❌ 获取access_token失败: {e}")
         sys.exit(1)
 
 def get_weather(region):
@@ -65,11 +65,11 @@ def get_weather(region):
                 set_cn = set_utc + timedelta(hours=8)
                 sunrise = rise_cn.strftime("%H:%M")
                 sunset = set_cn.strftime("%H:%M")
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ 日出日落接口异常: {e}")
 
     except Exception as e:
-        print(f"⚠️ 天气接口异常：{e}")
+        print(f"⚠️ 天气接口异常: {e}")
     
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
 
@@ -87,7 +87,8 @@ def get_birthday(birthday_str, year, today):
         if today > birthday:
             birthday = date(year + 1, birthday.month, birthday.day)
         return "0" if today == birthday else str((birthday - today).days)
-    except:
+    except Exception as e:
+        print(f"⚠️ 生日计算异常: {e}")
         return "未知"
 
 def get_ciba():
@@ -95,7 +96,8 @@ def get_ciba():
     try:
         res = requests.get("http://open.iciba.com/dsapi/", timeout=8).json()
         return res["note"], res["content"]
-    except:
+    except Exception as e:
+        print(f"⚠️ 每日金句接口异常: {e}")
         return "每天都有新的希望", "Keep going"
 
 # ========================
@@ -118,13 +120,15 @@ def get_zaoan():
             part2 = part2 if part2.strip() else ""
             part3 = part3 if part3.strip() else ""
             return part1, part2, part3
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ 早安心语接口异常: {e}")
     return "早安，新的一天也要元气满满～", "", ""
 
 def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_en):
     """推送消息"""
-    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={config['app_id']}&secret={config['app_secret']}"
+    access_token = requests.get(url).json()["access_token"]
+    send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
     week_list = ["周日","周一","周二","周三","周四","周五","周六"]
@@ -135,7 +139,8 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
     try:
         love = date(*map(int, config["love_date"].split("-")))
         love_days = str((today - love).days)
-    except:
+    except Exception as e:
+        print(f"⚠️ 在一起天数计算异常: {e}")
         love_days = "未知"
 
     # 推送数据
@@ -175,7 +180,7 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
 
     # 发送请求
     try:
-        res = requests.post(url, json=data, timeout=10).json()
+        res = requests.post(send_url, json=data, timeout=10).json()
         if res["errcode"] == 0:
             print(f"✅ 推送成功！")
             print(f"📊 数据预览 -> 城市：临沂市 | 天气：{weather} | 气温：{temp} | 风向：{wind_dir}")
@@ -189,9 +194,9 @@ if __name__ == "__main__":
     try:
         with open("config.txt", "r", encoding="utf-8") as f:
             config = eval(f.read())
-    except:
-        print("❌ 读取config.txt失败")
-        sys.exit()
+    except Exception as e:
+        print(f"❌ 读取config.txt失败: {e}")
+        sys.exit(1)
 
     # 核心流程
     token = get_access_token()
@@ -200,7 +205,11 @@ if __name__ == "__main__":
     note_ch1, note_ch2, note_ch3 = get_zaoan()
     note_en = "Good morning"
 
-    # 循环推送（过滤空ID）
-    for user in config["user_openid"]:
+    # 🔥 适配你现有的 `user` 字段，无需改config
+    # 自动兼容列表/单值
+    openids = config["user"]
+    if isinstance(openids, str):
+        openids = [openids]
+    for user in openids:
         if user.strip():
             send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_en)
