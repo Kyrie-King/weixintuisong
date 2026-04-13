@@ -150,7 +150,7 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             "note_en": {"value": note_en, "color": get_color()},
             # 双字段拆分长句，分别对应模板的两个「每日一句」字段
             "note_ch": {"value": note_ch1, "color": get_color()},
-            "note_ch2": {"value": note_ch2, "color": get_color()},
+            "note_ch2": {"value":note_ch2, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
     # 接收拆分后的两句早安心语
-    note_ch1,note_ch2 = get_zaoan()
+    note_ch1,note_ch2=get_zaoan()
     note_en = "Good morning"
 
     # 循环推送（过滤空ID）
