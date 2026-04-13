@@ -186,4 +186,4 @@ if __name__ == "__main__":
     # 循环推送（过滤空ID）
     for user in config["user"]:
         if user and user.strip():
-            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
+            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch)
