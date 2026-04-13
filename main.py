@@ -1,11 +1,17 @@
 import random
-from time import localtime
+from time import localtime, sleep
 import requests
 from datetime import datetime, date
 from zhdate import ZhDate
 import sys
 import os
 
+# 适配Linux/macOS的暂停函数（替代Windows的pause）
+def system_pause():
+    if os.name == 'nt':  # Windows系统
+        os.system("pause")
+    else:  # Linux/macOS系统
+        input("\n按回车键退出...")
 
 def get_color():
     """生成随机16进制颜色码"""
@@ -13,29 +19,36 @@ def get_color():
     color_list = get_colors(100)
     return random.choice(color_list)
 
-
 def get_access_token():
-    """获取微信公众号access_token"""
+    """获取微信公众号access_token（增加重试+超时优化）"""
     app_id = config["app_id"]
     app_secret = config["app_secret"]
     post_url = (
         "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}"
         .format(app_id, app_secret)
     )
-    try:
-        response = requests.get(post_url, timeout=10)
-        response.raise_for_status()
-        access_token = response.json()['access_token']
-    except KeyError:
-        print("获取access_token失败，请检查app_id和app_secret是否正确")
-        os.system("pause")
-        sys.exit(1)
-    except Exception as e:
-        print(f"获取access_token异常：{str(e)}")
-        os.system("pause")
-        sys.exit(1)
-    return access_token
-
+    # 增加重试机制，最多重试3次
+    max_retry = 3
+    for i in range(max_retry):
+        try:
+            # 延长超时时间到20秒，避免网络波动
+            response = requests.get(post_url, timeout=20)
+            response.raise_for_status()
+            access_token = response.json()['access_token']
+            return access_token
+        except KeyError:
+            print("获取access_token失败，请检查app_id和app_secret是否正确")
+            system_pause()
+            sys.exit(1)
+        except Exception as e:
+            print(f"第{i+1}次获取access_token失败：{str(e)}")
+            if i < max_retry - 1:
+                print("2秒后重试...")
+                sleep(2)
+            else:
+                print("重试次数已用完，程序退出")
+                system_pause()
+                sys.exit(1)
 
 def get_weather(region):
     """修复：和风天气最新接口 + 精准温度/风向/日出日落"""
@@ -110,7 +123,6 @@ def get_weather(region):
 
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
 
-
 def get_birthday(birthday_str, year, today):
     """计算生日倒计时"""
     try:
@@ -139,7 +151,6 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-
 def get_ciba():
     """每日一句"""
     url = "http://open.iciba.com/dsapi/"
@@ -154,7 +165,6 @@ def get_ciba():
         note_en = "Keep going"
         note_ch = "每天都有新的希望"
     return note_ch, note_en
-
 
 def send_message(to_user, access_token, region, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
     """推送模板消息（字段完全匹配你的模板）"""
@@ -212,14 +222,13 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         pass
 
     try:
-        resp = requests.post(url, json=data, timeout=10)
+        resp = requests.post(url, json=data, timeout=20)
         if resp.json()["errcode"] == 0:
             print(f"✅ 推送成功：{to_user}")
         else:
             print(f"❌ 推送失败：{resp.json()}")
     except Exception as e:
         print(f"⚠️ 推送异常：{e}")
-
 
 if __name__ == "__main__":
     # 读取配置
@@ -228,7 +237,7 @@ if __name__ == "__main__":
             config = eval(f.read())
     except:
         print("配置文件错误！")
-        os.system("pause")
+        system_pause()
         sys.exit()
 
     # 必备配置检查
@@ -236,7 +245,7 @@ if __name__ == "__main__":
     for m in must:
         if m not in config:
             print(f"缺失配置：{m}")
-            os.system("pause")
+            system_pause()
             sys.exit()
 
     access_token = get_access_token()
