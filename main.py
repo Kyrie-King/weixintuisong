@@ -92,6 +92,13 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
+def get_ciba():
+    """获取每日金句"""
+    try:
+        res = requests.get("http://open.iciba.com/dsapi/", timeout=8).json()
+        return res["note"], res["content"]
+    except:
+        return "每天都有新的希望", "Keep going"
 def get_zaoan():
     """
     天聚地合 早安心语API
@@ -142,6 +149,7 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             "wind_dir": {"value": wind_dir, "color": get_color()},  # 风向推送
             "wind_direction": {"value": wind_dir, "color": get_color()}, # 双保险
             "love_day": {"value": love_days, "color": get_color()},
+            "note_en": {"value": note_en, "color": get_color()},
             "note_ch": {"value": note_ch, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
@@ -182,8 +190,9 @@ if __name__ == "__main__":
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
     note_ch = get_zaoan()
+    note_en = "Good morning"
 
     # 循环推送（过滤空ID）
     for user in config["user"]:
         if user and user.strip():
-            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch)
+            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
