@@ -92,13 +92,23 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-def get_ciba():
-    """获取每日金句"""
+def get_zaoan():
+    """
+    天聚地合 早安心语API
+    免费、稳定、每天一句温暖早安
+    """
+    # 把这里换成你自己的 TianAPI Key
+    API_KEY = "你复制的ApiKey"
+
+    url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
     try:
-        res = requests.get("http://open.iciba.com/dsapi/", timeout=8).json()
-        return res["note"], res["content"]
+        res = requests.get(url, timeout=8)
+        data = res.json()
+        if data.get("code") == 200:
+            return data["result"]["content"]
     except:
-        return "每天都有新的希望", "Keep going"
+        pass
+    return "早安，新的一天也要元气满满～"
 
 def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
     """推送消息（核心修复：定义today再赋值week）"""
@@ -132,7 +142,6 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             "wind_dir": {"value": wind_dir, "color": get_color()},  # 风向推送
             "wind_direction": {"value": wind_dir, "color": get_color()}, # 双保险
             "love_day": {"value": love_days, "color": get_color()},
-            "note_en": {"value": note_en, "color": get_color()},
             "note_ch": {"value": note_ch, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
@@ -172,7 +181,7 @@ if __name__ == "__main__":
     # 核心流程
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
-    note_ch, note_en = get_ciba()
+    note_ch = get_zaoan()
 
     # 循环推送（过滤空ID）
     for user in config["user"]:
