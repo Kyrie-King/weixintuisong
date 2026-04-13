@@ -23,8 +23,8 @@ def get_access_token():
 
 def get_weather(region):
     """
-    ✅ 天气/气温/风向 保持你现在正确的状态
-    ✅ 日出日落 100% 精准北京时间（临沂真实时间）
+    ✅ 天气/气温/风向 保持正确状态
+    ✅ 温度全部带℃，日出日落精准北京时间
     """
     city_code = "101120901"
     url = f"http://t.weather.sojson.com/api/weather/city/{city_code}"
@@ -44,13 +44,14 @@ def get_weather(region):
         if data.get("status") == 200:
             today_forecast = data["data"]["forecast"][0]
             weather = today_forecast.get("type", "晴")
-            temp = data["data"].get("wendu", "20") + "℃"
+            temp = data["data"]["wendu"] + "℃"
             wind_dir = today_forecast.get("fx", "南风")
             
             low_temp = today_forecast.get("low", "15℃").replace("低温 ", "")
             high_temp = today_forecast.get("high", "28℃").replace("高温 ", "")
-            min_temp = low_temp
-            max_temp = high_temp
+            # 保证温度带℃
+            min_temp = low_temp if "℃" in low_temp else low_temp + "℃"
+            max_temp = high_temp if "℃" in high_temp else high_temp + "℃"
 
         # 精准日出日落（北京时间）
         try:
@@ -73,14 +74,14 @@ def get_weather(region):
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
 
 def get_birthday(birthday_str, year, today):
-    """计算生日倒计时"""
+    """计算生日倒计时（支持农历）"""
     try:
         if birthday_str.startswith("r"):
             _, m, d = birthday_str.split("-")
             lunar = ZhDate(year, int(m), int(d)).to_datetime().date()
             birthday = date(year, lunar.month, lunar.day)
         else:
-            _, m, d = birthday_str.split("-")
+            m, d = birthday_str.split("-")
             birthday = date(year, int(m), int(d))
 
         if today > birthday:
@@ -98,7 +99,7 @@ def get_ciba():
         return "每天都有新的希望", "Keep going"
 
 # ========================
-# 🔥 双字段拆分长句：返回两句，分别对应两个模板字段
+# 🔥 三字段拆分：返回3段文案，对应3个模板字段
 # ========================
 def get_zaoan():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
@@ -108,15 +109,20 @@ def get_zaoan():
         data = res.json()
         if data.get("code") == 200:
             content = data["result"]["content"]
-            # 按20字拆分，保证每句都在微信单行长度内
-            line1 = content[:20]
-            line2 = content[20:]
-            return line1, line2
+            # 按18字/段拆分，最多3段，完美适配3个单行字段
+            part1 = content[:18]
+            part2 = content[18:36]
+            part3 = content[36:54]
+            # 空内容兜底，避免字段为空
+            part1 = part1 if part1.strip() else ""
+            part2 = part2 if part2.strip() else ""
+            part3 = part3 if part3.strip() else ""
+            return part1, part2, part3
     except:
         pass
-    return "早安，新的一天也要元气满满～", ""
+    return "早安，新的一天也要元气满满～", "", ""
 
-def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en):
+def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_en):
     """推送消息"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     
@@ -148,9 +154,10 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             "wind_direction": {"value": wind_dir, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
             "note_en": {"value": note_en, "color": get_color()},
-            # 双字段拆分长句，分别对应模板的两个「每日一句」字段
+            # 三字段拆分，对应模板的3个「每日一句」字段
             "note_ch": {"value": note_ch1, "color": get_color()},
-            "note_ch2": {"value":note_ch2, "color": get_color()},
+            "note_ch2": {"value": note_ch2, "color": get_color()},
+            "note_ch3": {"value": note_ch3, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
@@ -158,13 +165,13 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
         }
     }
 
-    # 修复重复「距离」，统一格式
+    # 生日推送（格式：距离XX生日还有XX天）
     if "birthday1" in config:
         b1 = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday1"] = {"value": f"{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
+        data["data"]["birthday1"] = {"value": f"距离{config['birthday1']['name']}生日还有{b1}天" , "color": get_color()}
     if "birthday2" in config:
         b2 = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
-        data["data"]["birthday2"] = {"value": f"{config['birthday2']['name']}生日还有{b2}天" , "color": get_color()}
+        data["data"]["birthday2"] = {"value": f"距离{config['birthday2']['name']}生日还有{b2}天" , "color": get_color()}
 
     # 发送请求
     try:
@@ -173,7 +180,7 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             print(f"✅ 推送成功！")
             print(f"📊 数据预览 -> 城市：临沂市 | 天气：{weather} | 气温：{temp} | 风向：{wind_dir}")
         else:
-            print(f"❌ 推送失败：{res.get('errmsg')}")
+            print(f"❌ 推送失败：{res}")
     except Exception as e:
         print(f"❌ 网络异常：{e}")
 
@@ -189,11 +196,11 @@ if __name__ == "__main__":
     # 核心流程
     token = get_access_token()
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
-    # 接收拆分后的两句早安心语
-    note_ch1,note_ch2=get_zaoan()
+    # 接收拆分后的3段早安心语
+    note_ch1, note_ch2, note_ch3 = get_zaoan()
     note_en = "Good morning"
 
     # 循环推送（过滤空ID）
-    for user in config["user"]:
-        if user and user.strip():
-            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_en)
+    for user in config["user_openid"]:
+        if user.strip():
+            send_message(user, token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_en)
