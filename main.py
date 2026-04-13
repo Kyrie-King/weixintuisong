@@ -107,7 +107,7 @@ def get_ciba():
 def get_zaoan():
     """
     天聚地合 早安心语API
-    强制分段，适配微信模板，完整显示
+    自动控制长度，适配微信单行模板，完整显示不截断
     """
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
@@ -116,13 +116,16 @@ def get_zaoan():
         data = res.json()
         if data.get("code") == 200:
             content = data["result"]["content"]
-            # 🔥 按语义换行，保证每一行都在微信展示范围内
-            # 找到第一个逗号/句号，拆分句子
+            # 🔥 核心：微信单行最多30个汉字，直接取前30个完整语义
+            # 找到第30字附近的句号/逗号，保证句子完整
             import re
-            parts = re.split(r'[，。]', content)
-            # 过滤空字符串，拼接换行
-            valid_parts = [p.strip() for p in parts if p.strip()]
-            return "\n".join(valid_parts)
+            # 匹配30字内的最后一个标点，保证句子完整
+            match = re.search(r'^.{1,30}[，。！？；]', content)
+            if match:
+                return match.group(0)
+            else:
+                # 没有标点，直接取前30字
+                return content[:30]
     except:
         pass
     return "早安，新的一天也要元气满满～"
