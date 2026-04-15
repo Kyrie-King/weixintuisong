@@ -71,7 +71,7 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-# 🔥 土味情话接口（拆分为2个字段）
+# 🔥 修复：土味情话接口（拆分为2个字段）
 def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
@@ -79,9 +79,8 @@ def get_love_words():
         try:
             res = requests.get(url, timeout=30)
             data = res.json()
-            if data.get("code") == 200:
+            if data.get("code") == 200 and "result" in data and "content" in data["result"]:
                 content = data["result"]["content"]
-                # 按长度拆分，适配微信模板2字段
                 mid = len(content) // 2
                 return content[:mid], content[mid:]
         except Exception as e:
@@ -90,24 +89,37 @@ def get_love_words():
     print("⚠️ 3次重试后土味情话接口异常，使用默认值")
     return "我觉得你特别像一款游戏", "我的世界"
 
-# 🔥 脑筋急转弯接口（拆分为2个字段）
+# 🔥 核心修复：脑筋急转弯接口（参数+解析全修复，每次全新题目）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
+    # 修复1：正确参数num=1，每次返回1条随机题目
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
     for i in range(3):
         try:
             res = requests.get(url, timeout=30)
             data = res.json()
-            if data.get("code") == 200:
-                content = f"{data['result']['content']} → {data['result']['answer']}"
-                # 按长度拆分，适配微信模板2字段
-                mid = len(content) // 2
-                return content[:mid], content[mid:]
+            # 修复2：完整校验返回结构，避免KeyError
+            if data.get("code") == 200 and "result" in data:
+                result = data["result"]
+                if "content" in result and "answer" in result:
+                    content = f"{result['content']} → {result['answer']}"
+                    mid = len(content) // 2
+                    return content[:mid], content[mid:]
         except Exception as e:
             print(f"⚠️ 脑筋急转弯接口重试 {i+1}/3: {e}")
             sleep(2)
     print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
-    return "什么东西越洗越脏？→", "水"
+    # 备用默认值池，每次随机选一个，避免永远不变
+    riddles = [
+        "什么东西越洗越脏？→水",
+        "什么东西越热越爱出来？→汗",
+        "什么东西有脚却不能走路？→桌子",
+        "什么东西打破了才能用？→鸡蛋",
+        "什么东西明明是你的，别人却用得比你多？→名字"
+    ]
+    riddle = random.choice(riddles)
+    mid = len(riddle) // 2
+    return riddle[:mid], riddle[mid:]
 
 def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle1, riddle2):
     send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
@@ -142,7 +154,6 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             "love_day": {"value": love_days, "color": get_color()},
             "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1}天", "color": get_color()},
             "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
-            # 🔥 新增4个字段：土味情话2个 + 脑筋急转弯2个
             "love1": {"value": love1, "color": get_color()},
             "love2": {"value": love2, "color": get_color()},
             "riddle1": {"value": riddle1, "color": get_color()},
@@ -179,7 +190,6 @@ if __name__ == "__main__":
 
     token = get_access_token()
     real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset = get_weather(config["region"])
-    # 🔥 获取两个新接口的数据
     love1, love2 = get_love_words()
     riddle1, riddle2 = get_riddle()
 
