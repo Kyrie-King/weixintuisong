@@ -25,11 +25,9 @@ def get_access_token():
     sys.exit(1)
 
 def get_weather(region):
-    # 🔥 修复：合并实时/预报天气，统一返回，彻底避免None
-    city_code = "101120901"  # 临沂城市代码
+    city_code = "101120901"
     url = f"http://t.weather.sojson.com/api/weather/city/{city_code}"
     
-    # 默认值兜底，永远不会返回None
     real_temp = "23"
     min_temp = "11"
     max_temp = "25"
@@ -44,21 +42,17 @@ def get_weather(region):
             data = res.json()
             if data.get("status") == 200:
                 today_forecast = data["data"]["forecast"][0]
-                # 正确获取所有温度
-                real_temp = data["data"]["wendu"]  # 实时温度
+                real_temp = data["data"]["wendu"]
                 weather = today_forecast.get("type", "多云")
                 wind_dir = today_forecast.get("fx", "东北风")
-                # 处理最低/最高温，去掉冗余字符
                 min_temp = today_forecast.get("low", "11").replace("低温 ", "").replace("℃", "")
                 max_temp = today_forecast.get("high", "25").replace("高温 ", "").replace("℃", "")
                 sunrise = today_forecast.get("sunrise", "05:37")
                 sunset = today_forecast.get("sunset", "18:37")
-                # 🔥 关键：永远返回元组，不会返回None
                 return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
         except Exception as e:
             print(f"⚠️ 天气接口重试 {i+1}/3: {e}")
             sleep(2)
-    # 网络异常时，返回默认值，保证代码不崩溃
     print(f"⚠️ 3次重试后天气接口异常，使用默认值")
     return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
 
@@ -77,30 +71,49 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-def get_zaoan():
+# 🔥 土味情话接口（拆分为2个字段）
+def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
-    url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
+    url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
     for i in range(3):
         try:
             res = requests.get(url, timeout=30)
             data = res.json()
             if data.get("code") == 200:
                 content = data["result"]["content"]
-                # 四字段拆分，适配你的模板
-                return content[:16], content[16:32], content[32:48], content[48:64]
+                # 按长度拆分，适配微信模板2字段
+                mid = len(content) // 2
+                return content[:mid], content[mid:]
         except Exception as e:
-            print(f"⚠️ 早安心语接口重试 {i+1}/3: {e}")
+            print(f"⚠️ 土味情话接口重试 {i+1}/3: {e}")
             sleep(2)
-    print("⚠️ 3次重试后早安心语接口异常，使用默认值")
-    return "早安，新的一天也要元气满满～", "", "", ""
+    print("⚠️ 3次重试后土味情话接口异常，使用默认值")
+    return "我觉得你特别像一款游戏", "我的世界"
 
-def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_ch4, note_en):
-    send_url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={access_token}"
+# 🔥 脑筋急转弯接口（拆分为2个字段）
+def get_riddle():
+    API_KEY = "769e688a2a945817a2b8140e853b78eb"
+    url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
+    for i in range(3):
+        try:
+            res = requests.get(url, timeout=30)
+            data = res.json()
+            if data.get("code") == 200:
+                content = f"{data['result']['content']} → {data['result']['answer']}"
+                # 按长度拆分，适配微信模板2字段
+                mid = len(content) // 2
+                return content[:mid], content[mid:]
+        except Exception as e:
+            print(f"⚠️ 脑筋急转弯接口重试 {i+1}/3: {e}")
+            sleep(2)
+    print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
+    return "什么东西越洗越脏？→", "水"
+
+def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle1, riddle2):
     send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
     week_list = ["周日","周一","周二","周三","周四","周五","周六"]
-    week = week_list[today.weekday()]
-    date_str = f"{today} {week}"
+    date_str = f"{today} {week_list[today.weekday()]}"
     
     try:
         love = date(*map(int, config["love_date"].split("-")))
@@ -108,16 +121,13 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
     except:
         love_days = "未知"
 
-    # 生日文案，修复重复"距离"
-    b1 = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
-    birthday1_text = f"{config['birthday1']['name']}生日还有{b1}天"
-    b2 = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
-    birthday2_text = f"{config['birthday2']['name']}生日还有{b2}天"
+    b1 = get_birthday(config["birthday1"]["birthday"], today.year, today)
+    b2 = get_birthday(config["birthday2"]["birthday"], today.year, today)
 
     data = {
         "touser": to_user,
         "template_id": config["template_id"],
-        "url": "http://weixin.qq.com",
+        "url": "",
         "topcolor": "#FF0000",
         "data": {
             "date": {"value": date_str, "color": get_color()},
@@ -130,12 +140,13 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             "sunrise": {"value": sunrise, "color": get_color()},
             "sunset": {"value": sunset, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
-            "birthday1": {"value": birthday1_text, "color": get_color()},
-            "birthday2": {"value": birthday2_text, "color": get_color()},
-            "note_ch": {"value": note_ch1, "color": get_color()},
-            "note_ch2": {"value": note_ch2, "color": get_color()},
-            "note_ch3": {"value": note_ch3, "color": get_color()},
-            "note_ch4": {"value": note_ch4, "color": get_color()},
+            "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1}天", "color": get_color()},
+            "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
+            # 🔥 新增4个字段：土味情话2个 + 脑筋急转弯2个
+            "love1": {"value": love1, "color": get_color()},
+            "love2": {"value": love2, "color": get_color()},
+            "riddle1": {"value": riddle1, "color": get_color()},
+            "riddle2": {"value": riddle2, "color": get_color()},
         }
     }
 
@@ -147,6 +158,8 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
                 if res_data["errcode"] == 0:
                     print(f"✅ 推送成功！")
                     print(f"📊 实时{real_temp}℃ | 最低{min_temp}℃ | 最高{max_temp}℃")
+                    print(f"💘土味情话：{love1}{love2}")
+                    print(f"🧠脑筋急转弯：{riddle1}{riddle2}")
                     return
                 else:
                     print(f"⚠️ 推送重试 {i+1}/3: {res_data}")
@@ -165,15 +178,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     token = get_access_token()
-    # 🔥 统一天气获取，彻底避免None
     real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset = get_weather(config["region"])
-    note_ch1, note_ch2, note_ch3, note_ch4 = get_zaoan()
-    note_en = "Good morning"
+    # 🔥 获取两个新接口的数据
+    love1, love2 = get_love_words()
+    riddle1, riddle2 = get_riddle()
 
-    # 适配user字段，兼容列表/单值
-    openids = config["user"]
-    if isinstance(openids, str):
-        openids = [openids]
+    openids = config["user"] if isinstance(config["user"], list) else [config["user"]]
     for user in openids:
         if user.strip():
-            send_message(user, token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_ch4, note_en)
+            send_message(user, token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle1, riddle2)
