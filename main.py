@@ -9,18 +9,25 @@ import os
 def get_color():
     return "#000000"
 
+# 🔥 核心修复：微信access_token获取（参数+超时+日志全优化）
 def get_access_token():
     app_id = config["app_id"]
     app_secret = config["app_secret"]
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=credential&appid={app_id}&secret={app_secret}"
-    for _ in range(3):
+    # 修复1：grant_type拼写错误（之前是credential，正确是client_credential）
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
+    for i in range(3):
         try:
-            res = requests.get(url, timeout=15)
-            if res.status_code == 200 and "access_token" in res.json():
-                return res.json()["access_token"]
+            # 修复2：增加超时时间，避免网络波动
+            res = requests.get(url, timeout=20)
+            data = res.json()
+            print(f"🔍 微信token接口返回: {data}")  # 调试日志，可删除
+            if "access_token" in data:
+                return data["access_token"]
+            else:
+                print(f"⚠️ 获取token重试 {i+1}/3: {data.get('errmsg', '未知错误')}")
         except Exception as e:
-            print(f"⚠️ 获取token重试 {_+1}/3: {e}")
-            sleep(1)
+            print(f"⚠️ 获取token重试 {i+1}/3: {e}")
+            sleep(2)
     print("❌ 3次重试后获取access_token失败")
     sys.exit(1)
 
@@ -81,7 +88,6 @@ def get_love_words():
             data = res.json()
             if data.get("code") == 200 and "content" in data.get("result", {}):
                 content = data["result"]["content"]
-                # 按语义拆分，避免断句
                 if len(content) > 20:
                     mid = content.find("，", 15, 30)
                     if mid == -1:
@@ -94,7 +100,7 @@ def get_love_words():
     print("⚠️ 3次重试后土味情话接口异常，使用默认值")
     return "我每天都在喜欢你，", "岁岁年年不会变。"
 
-# 🔥 核心需求：脑筋急转弯问题分2个变量，答案单独1个
+# 🔥 脑筋急转弯（问题分2段+答案单独1段）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
@@ -112,9 +118,7 @@ def get_riddle():
                     question = item.get("quest", "未知问题")
                     answer = item.get("result", "未知答案")
                     
-                    # 🔴 关键：把问题拆成2个变量，答案单独1个
                     q_len = len(question)
-                    # 按长度对半拆分问题
                     q1 = question[:q_len//2]
                     q2 = question[q_len//2:]
                     return q1, q2, answer
@@ -123,7 +127,6 @@ def get_riddle():
             sleep(1)
     
     print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
-    # 兜底题库
     riddle_pool = [
         ("什么东西越洗越脏？", "水"),
         ("什么东西越热越爱出来？", "汗"),
@@ -171,7 +174,6 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
             "love1": {"value": love1, "color": get_color()},
             "love2": {"value": love2, "color": get_color()},
-            # 🔥 新增3个字段：问题2段 + 答案
             "riddle_q1": {"value": riddle_q1, "color": get_color()},
             "riddle_q2": {"value": riddle_q2, "color": get_color()},
             "riddle_ans": {"value": riddle_ans, "color": get_color()},
