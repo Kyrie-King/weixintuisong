@@ -12,7 +12,7 @@ def get_color():
 def get_access_token():
     app_id = config["app_id"]
     app_secret = config["app_secret"]
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=credential&appid={app_id}&secret={app_secret}"
     for _ in range(3):
         try:
             res = requests.get(url, timeout=15)
@@ -71,7 +71,7 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-# 🔥 土味情话（优化分段，避免截断）
+# 🔥 土味情话（稳定版）
 def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
@@ -81,7 +81,7 @@ def get_love_words():
             data = res.json()
             if data.get("code") == 200 and "content" in data.get("result", {}):
                 content = data["result"]["content"]
-                # 优化：按语义拆分，避免中间断句
+                # 按语义拆分，避免断句
                 if len(content) > 20:
                     mid = content.find("，", 15, 30)
                     if mid == -1:
@@ -94,7 +94,7 @@ def get_love_words():
     print("⚠️ 3次重试后土味情话接口异常，使用默认值")
     return "我每天都在喜欢你，", "岁岁年年不会变。"
 
-# 🔥 核心优化：脑筋急转弯（完美分段，100%完整显示）
+# 🔥 核心需求：脑筋急转弯问题分2个变量，答案单独1个
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
@@ -103,7 +103,6 @@ def get_riddle():
         try:
             res = requests.get(url, timeout=15)
             data = res.json()
-            print(f"🔍 脑筋急转弯接口返回: {data}")
             
             if data.get("code") == 200:
                 result = data.get("result", {})
@@ -113,36 +112,31 @@ def get_riddle():
                     question = item.get("quest", "未知问题")
                     answer = item.get("result", "未知答案")
                     
-                    # 🔥 关键优化：问题一行，答案单独一行，完美适配微信
-                    # 拆分逻辑：问题+换行+答案，保证完整显示
-                    full_text = f"{question}\n答案：{answer}"
-                    # 按换行拆分，问题在riddle1，答案在riddle2
-                    if "\n" in full_text:
-                        part1, part2 = full_text.split("\n", 1)
-                        return part1, part2
-                    # 兜底：按长度拆分
-                    mid = len(full_text) // 2
-                    return full_text[:mid], full_text[mid:]
+                    # 🔴 关键：把问题拆成2个变量，答案单独1个
+                    q_len = len(question)
+                    # 按长度对半拆分问题
+                    q1 = question[:q_len//2]
+                    q2 = question[q_len//2:]
+                    return q1, q2, answer
         except Exception as e:
             print(f"⚠️ 脑筋急转弯接口重试 {i+1}/3: {e}")
             sleep(1)
     
     print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
+    # 兜底题库
     riddle_pool = [
-        "什么东西越洗越脏？\n答案：水",
-        "什么东西越热越爱出来？\n答案：汗",
-        "什么东西有脚却不能走路？\n答案：桌子",
-        "什么东西打破了才能用？\n答案：鸡蛋",
-        "什么东西别人请你吃，但你自己还要付钱？\n答案：官司"
+        ("什么东西越洗越脏？", "水"),
+        ("什么东西越热越爱出来？", "汗"),
+        ("什么东西有脚却不能走路？", "桌子"),
+        ("什么东西打破了才能用？", "鸡蛋"),
+        ("什么东西别人请你吃，但你自己还要付钱？", "官司")
     ]
-    riddle = random.choice(riddle_pool)
-    if "\n" in riddle:
-        part1, part2 = riddle.split("\n", 1)
-        return part1, part2
-    mid = len(riddle) // 2
-    return riddle[:mid], riddle[mid:]
+    q, a = random.choice(riddle_pool)
+    q1 = q[:len(q)//2]
+    q2 = q[len(q)//2:]
+    return q1, q2, a
 
-def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle1, riddle2):
+def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle_q1, riddle_q2, riddle_ans):
     send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
     week_list = ["周日","周一","周二","周三","周四","周五","周六"]
@@ -177,8 +171,10 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
             "love1": {"value": love1, "color": get_color()},
             "love2": {"value": love2, "color": get_color()},
-            "riddle1": {"value": riddle1, "color": get_color()},
-            "riddle2": {"value": riddle2, "color": get_color()},
+            # 🔥 新增3个字段：问题2段 + 答案
+            "riddle_q1": {"value": riddle_q1, "color": get_color()},
+            "riddle_q2": {"value": riddle_q2, "color": get_color()},
+            "riddle_ans": {"value": riddle_ans, "color": get_color()},
         }
     }
 
@@ -191,7 +187,7 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
                     print(f"✅ 推送成功！")
                     print(f"📊 实时{real_temp}℃ | 最低{min_temp}℃ | 最高{max_temp}℃")
                     print(f"💘土味情话：{love1}{love2}")
-                    print(f"🧠脑筋急转弯：{riddle1}{riddle2}")
+                    print(f"🧠脑筋急转弯：{riddle_q1}{riddle_q2} → {riddle_ans}")
                     return
                 else:
                     print(f"⚠️ 推送重试 {i+1}/3: {res_data}")
@@ -212,9 +208,9 @@ if __name__ == "__main__":
     token = get_access_token()
     real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset = get_weather(config["region"])
     love1, love2 = get_love_words()
-    riddle1, riddle2 = get_riddle()
+    riddle_q1, riddle_q2, riddle_ans = get_riddle()
 
     openids = config["user"] if isinstance(config["user"], list) else [config["user"]]
     for user in openids:
         if user.strip():
-            send_message(user, token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle1, riddle2)
+            send_message(user, token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, love1, love2, riddle_q1, riddle_q2, riddle_ans)
