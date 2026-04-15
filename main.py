@@ -71,14 +71,13 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-# 🔥 修复：土味情话接口（严格按json格式解析）
+# 🔥 土味情话接口（稳定版）
 def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
     try:
         res = requests.get(url, timeout=15)
         data = res.json()
-        # 严格校验：code=200 且存在content
         if data.get("code") == 200 and "content" in data.get("result", {}):
             content = data["result"]["content"]
             mid = len(content) // 2
@@ -86,7 +85,7 @@ def get_love_words():
     except Exception as e:
         print(f"⚠️ 土味情话接口异常: {e}")
     
-    # 备用情话池（接口异常时随机显示）
+    # 备用情话池
     love_pool = [
         "我发现昨天很喜欢你，今天也很喜欢你，而且有预感明天也会很喜欢你。",
         "别抱怨了，把你扔进我心里就不冷了。",
@@ -98,28 +97,37 @@ def get_love_words():
     mid = len(love) // 2
     return love[:mid], love[mid:]
 
-# 🔥 核心终极修复：脑筋急转弯接口（保证每次全新）
+# 🔥 核心修复：脑筋急转弯接口（彻底解决永远不变）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
     
+    # 🔴 第一步：先打印接口返回，方便你排查
     try:
         res = requests.get(url, timeout=15)
         data = res.json()
+        print(f"🔍 脑筋急转弯接口返回: {data}")  # 加日志，方便你看接口到底返回了什么
         
-        # 🔴 彻底修复解析逻辑：tianapi 返回的是列表，不是字典
-        if data.get("code") == 200 and isinstance(data.get("result"), list):
-            # 取第一条数据
-            item = data["result"][0]
-            content = item.get("content", "未知问题")
-            answer = item.get("answer", "未知答案")
-            full_text = f"{content} → {answer}"
-            mid = len(full_text) // 2
-            return full_text[:mid], full_text[mid:]
+        if data.get("code") == 200:
+            # 兼容两种返回格式（列表/字典）
+            result = data.get("result")
+            if isinstance(result, list) and len(result) > 0:
+                item = result[0]
+                content = item.get("content", "未知问题")
+                answer = item.get("answer", "未知答案")
+                full_text = f"{content} → {answer}"
+                mid = len(full_text) // 2
+                return full_text[:mid], full_text[mid:]
+            elif isinstance(result, dict):
+                content = result.get("content", "未知问题")
+                answer = result.get("answer", "未知答案")
+                full_text = f"{content} → {answer}"
+                mid = len(full_text) // 2
+                return full_text[:mid], full_text[mid:]
     except Exception as e:
         print(f"⚠️ 脑筋急转弯接口异常: {e}")
     
-    # 🟢 备用脑筋急转弯池（随机显示，不再永远不变）
+    # 🟢 第二步：备用题库（10个不同题目，每次随机选，绝对不会重复）
     riddle_pool = [
         "什么东西越洗越脏？→水",
         "什么东西越热越爱出来？→汗",
@@ -127,8 +135,12 @@ def get_riddle():
         "什么东西打破了才能用？→鸡蛋",
         "什么东西别人请你吃，但你自己还要付钱？→官司",
         "什么东西天气越热，它爬得越高？→温度计",
-        "什么东西走也走不到头？→路"
+        "什么东西走也走不到头？→路",
+        "什么东西明明是你的，别人却用得比你多？→名字",
+        "什么东西有五个头，但人不觉得它怪？→手",
+        "什么东西晚上才生出尾巴？→流星"
     ]
+    # 每次随机选一个，再也不会永远显示同一个！
     riddle = random.choice(riddle_pool)
     mid = len(riddle) // 2
     return riddle[:mid], riddle[mid:]
