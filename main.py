@@ -71,7 +71,7 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-# 🔥 土味情话接口（稳定版）
+# 🔥 土味情话（优化分段，避免截断）
 def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
@@ -81,15 +81,20 @@ def get_love_words():
             data = res.json()
             if data.get("code") == 200 and "content" in data.get("result", {}):
                 content = data["result"]["content"]
-                mid = len(content) // 2
-                return content[:mid], content[mid:]
+                # 优化：按语义拆分，避免中间断句
+                if len(content) > 20:
+                    mid = content.find("，", 15, 30)
+                    if mid == -1:
+                        mid = len(content) // 2
+                    return content[:mid+1], content[mid+1:]
+                return content, ""
         except Exception as e:
             print(f"⚠️ 土味情话接口重试 {i+1}/3: {e}")
             sleep(1)
     print("⚠️ 3次重试后土味情话接口异常，使用默认值")
     return "我每天都在喜欢你，", "岁岁年年不会变。"
 
-# 🔥 核心终极修复：脑筋急转弯接口（完美适配天聚数行真实返回结构）
+# 🔥 核心优化：脑筋急转弯（完美分段，100%完整显示）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
@@ -98,19 +103,24 @@ def get_riddle():
         try:
             res = requests.get(url, timeout=15)
             data = res.json()
-            print(f"🔍 脑筋急转弯接口返回: {data}")  # 调试日志，可删除
+            print(f"🔍 脑筋急转弯接口返回: {data}")
             
-            # 严格校验返回结构
             if data.get("code") == 200:
                 result = data.get("result", {})
-                # 天聚数行真实结构：result -> list -> [0] -> quest / result
                 riddle_list = result.get("list", [])
                 if isinstance(riddle_list, list) and len(riddle_list) > 0:
                     item = riddle_list[0]
                     question = item.get("quest", "未知问题")
                     answer = item.get("result", "未知答案")
                     
-                    full_text = f"{question} → {answer}"
+                    # 🔥 关键优化：问题一行，答案单独一行，完美适配微信
+                    # 拆分逻辑：问题+换行+答案，保证完整显示
+                    full_text = f"{question}\n答案：{answer}"
+                    # 按换行拆分，问题在riddle1，答案在riddle2
+                    if "\n" in full_text:
+                        part1, part2 = full_text.split("\n", 1)
+                        return part1, part2
+                    # 兜底：按长度拆分
                     mid = len(full_text) // 2
                     return full_text[:mid], full_text[mid:]
         except Exception as e:
@@ -118,20 +128,17 @@ def get_riddle():
             sleep(1)
     
     print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
-    # 兜底随机题库，避免永远不变
     riddle_pool = [
-        "什么东西越洗越脏？→水",
-        "什么东西越热越爱出来？→汗",
-        "什么东西有脚却不能走路？→桌子",
-        "什么东西打破了才能用？→鸡蛋",
-        "什么东西别人请你吃，但你自己还要付钱？→官司",
-        "什么东西天气越热，它爬得越高？→温度计",
-        "什么东西走也走不到头？→路",
-        "什么东西明明是你的，别人却用得比你多？→名字",
-        "什么东西有五个头，但人不觉得它怪？→手",
-        "什么东西晚上才生出尾巴？→流星"
+        "什么东西越洗越脏？\n答案：水",
+        "什么东西越热越爱出来？\n答案：汗",
+        "什么东西有脚却不能走路？\n答案：桌子",
+        "什么东西打破了才能用？\n答案：鸡蛋",
+        "什么东西别人请你吃，但你自己还要付钱？\n答案：官司"
     ]
     riddle = random.choice(riddle_pool)
+    if "\n" in riddle:
+        part1, part2 = riddle.split("\n", 1)
+        return part1, part2
     mid = len(riddle) // 2
     return riddle[:mid], riddle[mid:]
 
