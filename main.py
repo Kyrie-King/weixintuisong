@@ -15,12 +15,12 @@ def get_access_token():
     url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
     for i in range(3):
         try:
-            res = requests.get(url, timeout=30)
+            res = requests.get(url, timeout=15)
             if res.status_code == 200 and "access_token" in res.json():
                 return res.json()["access_token"]
         except Exception as e:
             print(f"⚠️ 获取token重试 {i+1}/3: {e}")
-            sleep(2)
+            sleep(1)
     print("❌ 3次重试后获取access_token失败")
     sys.exit(1)
 
@@ -38,7 +38,7 @@ def get_weather(region):
 
     for i in range(3):
         try:
-            res = requests.get(url, timeout=30)
+            res = requests.get(url, timeout=15)
             data = res.json()
             if data.get("status") == 200:
                 today_forecast = data["data"]["forecast"][0]
@@ -52,7 +52,7 @@ def get_weather(region):
                 return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
         except Exception as e:
             print(f"⚠️ 天气接口重试 {i+1}/3: {e}")
-            sleep(2)
+            sleep(1)
     print(f"⚠️ 3次重试后天气接口异常，使用默认值")
     return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
 
@@ -71,53 +71,65 @@ def get_birthday(birthday_str, year, today):
     except:
         return "未知"
 
-# 🔥 修复：土味情话接口（拆分为2个字段）
+# 🔥 修复：土味情话接口（严格按json格式解析）
 def get_love_words():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/saylove/index?key={API_KEY}"
-    for i in range(3):
-        try:
-            res = requests.get(url, timeout=30)
-            data = res.json()
-            if data.get("code") == 200 and "result" in data and "content" in data["result"]:
-                content = data["result"]["content"]
-                mid = len(content) // 2
-                return content[:mid], content[mid:]
-        except Exception as e:
-            print(f"⚠️ 土味情话接口重试 {i+1}/3: {e}")
-            sleep(2)
-    print("⚠️ 3次重试后土味情话接口异常，使用默认值")
-    return "我觉得你特别像一款游戏", "我的世界"
+    try:
+        res = requests.get(url, timeout=15)
+        data = res.json()
+        # 严格校验：code=200 且存在content
+        if data.get("code") == 200 and "content" in data.get("result", {}):
+            content = data["result"]["content"]
+            mid = len(content) // 2
+            return content[:mid], content[mid:]
+    except Exception as e:
+        print(f"⚠️ 土味情话接口异常: {e}")
+    
+    # 备用情话池（接口异常时随机显示）
+    love_pool = [
+        "我发现昨天很喜欢你，今天也很喜欢你，而且有预感明天也会很喜欢你。",
+        "别抱怨了，把你扔进我心里就不冷了。",
+        "你知道我想喝什么吗？想呵护你。",
+        "我最近有点忙，忙着喜欢你。",
+        "你是不是有什么毛病？不然怎么怎么看你都顺眼。"
+    ]
+    love = random.choice(love_pool)
+    mid = len(love) // 2
+    return love[:mid], love[mid:]
 
-# 🔥 核心修复：脑筋急转弯接口（参数+解析全修复，每次全新题目）
+# 🔥 核心终极修复：脑筋急转弯接口（保证每次全新）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
-    # 修复1：正确参数num=1，每次返回1条随机题目
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
-    for i in range(3):
-        try:
-            res = requests.get(url, timeout=30)
-            data = res.json()
-            # 修复2：完整校验返回结构，避免KeyError
-            if data.get("code") == 200 and "result" in data:
-                result = data["result"]
-                if "content" in result and "answer" in result:
-                    content = f"{result['content']} → {result['answer']}"
-                    mid = len(content) // 2
-                    return content[:mid], content[mid:]
-        except Exception as e:
-            print(f"⚠️ 脑筋急转弯接口重试 {i+1}/3: {e}")
-            sleep(2)
-    print("⚠️ 3次重试后脑筋急转弯接口异常，使用默认值")
-    # 备用默认值池，每次随机选一个，避免永远不变
-    riddles = [
+    
+    try:
+        res = requests.get(url, timeout=15)
+        data = res.json()
+        
+        # 🔴 彻底修复解析逻辑：tianapi 返回的是列表，不是字典
+        if data.get("code") == 200 and isinstance(data.get("result"), list):
+            # 取第一条数据
+            item = data["result"][0]
+            content = item.get("content", "未知问题")
+            answer = item.get("answer", "未知答案")
+            full_text = f"{content} → {answer}"
+            mid = len(full_text) // 2
+            return full_text[:mid], full_text[mid:]
+    except Exception as e:
+        print(f"⚠️ 脑筋急转弯接口异常: {e}")
+    
+    # 🟢 备用脑筋急转弯池（随机显示，不再永远不变）
+    riddle_pool = [
         "什么东西越洗越脏？→水",
         "什么东西越热越爱出来？→汗",
         "什么东西有脚却不能走路？→桌子",
         "什么东西打破了才能用？→鸡蛋",
-        "什么东西明明是你的，别人却用得比你多？→名字"
+        "什么东西别人请你吃，但你自己还要付钱？→官司",
+        "什么东西天气越热，它爬得越高？→温度计",
+        "什么东西走也走不到头？→路"
     ]
-    riddle = random.choice(riddles)
+    riddle = random.choice(riddle_pool)
     mid = len(riddle) // 2
     return riddle[:mid], riddle[mid:]
 
@@ -163,7 +175,7 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
 
     for i in range(3):
         try:
-            res = requests.post(send_url, json=data, timeout=30)
+            res = requests.post(send_url, json=data, timeout=15)
             if res.status_code == 200:
                 res_data = res.json()
                 if res_data["errcode"] == 0:
@@ -176,7 +188,7 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
                     print(f"⚠️ 推送重试 {i+1}/3: {res_data}")
         except Exception as e:
             print(f"⚠️ 推送请求重试 {i+1}/3: {e}")
-            sleep(2)
+            sleep(1)
     print("❌ 3次重试后推送失败")
     sys.exit(1)
 
