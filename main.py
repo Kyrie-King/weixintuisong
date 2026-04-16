@@ -221,15 +221,15 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             res_data = res.json()
             print(f"🔍 推送接口返回: {json.dumps(res_data, ensure_ascii=False)}")
             if res_data.get("errcode") == 0:
-                print(f"✅ 推送成功！")
-                return
+                print(f"✅ 用户 {to_user[:10]}... 推送成功！")
+                return True
             else:
-                print(f"⚠️ 推送失败: {res_data.get('errmsg', '未知错误')}")
+                print(f"⚠️ 用户 {to_user[:10]}... 推送失败: {res_data.get('errmsg', '未知错误')}")
         except Exception as e:
             print(f"⚠️ 推送请求异常: {str(e)}")
         sleep(2)
-    print("❌ 3次重试后推送失败")
-    sys.exit(1)
+    print(f"❌ 用户 {to_user[:10]}... 3次重试后推送失败")
+    return False
 
 if __name__ == "__main__":
     print("🚀 开始执行微信推送程序...")
@@ -246,12 +246,29 @@ if __name__ == "__main__":
     love1, love2 = get_love_words()
     rq1, rq2, rq3, rq4, ra1, ra2 = get_riddle()
 
+    # 处理多用户OpenID
     openids = config["user"]
     if not isinstance(openids, list):
         openids = [openids]
+    
+    success_count = 0
+    fail_count = 0
 
     for oid in openids:
-        send_message(oid, token, wt1, wt2, wt3, wt4, wt5, wt6, wt7,
+        # 过滤空字符串/无效OpenID
+        if not oid or len(oid) < 20:
+            print(f"⚠️ 跳过无效OpenID: {oid}")
+            fail_count += 1
+            continue
+        if send_message(oid, token, wt1, wt2, wt3, wt4, wt5, wt6, wt7,
                      love1, love2,
-                     rq1, rq2, rq3, rq4, ra1, ra2)
-    print("🎉 所有推送任务完成！")
+                     rq1, rq2, rq3, rq4, ra1, ra2):
+            success_count += 1
+        else:
+            fail_count += 1
+    
+    print(f"\n🎉 推送任务完成！成功: {success_count} 个，失败: {fail_count} 个")
+    if fail_count > 0:
+        print(f"⚠️ 部分用户推送失败，请检查OpenID是否正确、是否关注公众号")
+        sys.exit(1)
+    sys.exit(0)
