@@ -83,9 +83,7 @@ def get_love_words():
         pass
     return "我满眼皆是你，", "岁岁年年都是你。"
 
-# 🔥 核心：脑筋急转弯
-# 问题拆4段 q1 q2 q3 q4
-# 答案拆2段 ans1 ans2
+# 🔥 核心：脑筋急转弯（问题4段 + 答案2段）
 def get_riddle():
     API_KEY = "769e688a2a945817a2b8140e853b78eb"
     url = f"https://apis.tianapi.com/naowan/index?key={API_KEY}&num=1"
@@ -97,7 +95,7 @@ def get_riddle():
             question = item.get("quest", "")
             answer = item.get("result", "")
 
-            # 问题均分 4 段
+            # 问题均分4段
             def split_four(s):
                 l = len(s)
                 part1 = s[:l//4]
@@ -106,7 +104,7 @@ def get_riddle():
                 part4 = s[l//4*3:]
                 return part1, part2, part3, part4
 
-            # 答案均分 2 段
+            # 答案均分2段
             def split_two(s):
                 mid = len(s) // 2
                 return s[:mid], s[mid:]
@@ -120,17 +118,27 @@ def get_riddle():
     # 兜底
     q = "什么东西只能加不能减，每个人都有"
     a = "年龄只会一年一年变大"
+    def split_four(s):
+        l = len(s)
+        part1 = s[:l//4]
+        part2 = s[l//4 : l//4*2]
+        part3 = s[l//4*2 : l//4*3]
+        part4 = s[l//4*3:]
+        return part1, part2, part3, part4
+    def split_two(s):
+        mid = len(s) // 2
+        return s[:mid], s[mid:]
     q1, q2, q3, q4 = split_four(q)
     ans1, ans2 = split_two(a)
     return q1, q2, q3, q4, ans1, ans2
 
-# 发送微信消息
+# 发送微信消息（参数完全对齐，无缺失）
 def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset,
                  love1, love2,
                  riddle_q1, riddle_q2, riddle_q3, riddle_q4,
                  riddle_ans1, riddle_ans2):
 
-    send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
+    send_url = f"https://api.weixin.qq.com/cgi-bin/template/send?access_token={access_token}"
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
     week_list = ["周日","周一","周二","周三","周四","周五","周六"]
     date_str = f"{today} {week_list[today.weekday()]}"
@@ -150,29 +158,29 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
         "url": "",
         "topcolor": "#FF0000",
         "data": {
-            "date": {"value": date_str},
-            "city": {"value": "临沂市"},
-            "weather": {"value": weather},
-            "real_temp": {"value": real_temp},
-            "min_temperature": {"value": min_temp},
-            "max_temperature": {"value": max_temp},
-            "wind_direction": {"value": wind_dir},
-            "sunrise": {"value": sunrise},
-            "sunset": {"value": sunset},
-            "love_day": {"value": love_days},
-            "birthday1": {"value": f"{config['birthday1']['name']}还有{b1}天"},
-            "birthday2": {"value": f"{config['birthday2']['name']}还有{b2}天"},
+            "date": {"value": date_str, "color": get_color()},
+            "city": {"value": "临沂市", "color": get_color()},
+            "weather": {"value": weather, "color": get_color()},
+            "real_temp": {"value": real_temp, "color": get_color()},
+            "min_temperature": {"value": min_temp, "color": get_color()},
+            "max_temperature": {"value": max_temp, "color": get_color()},
+            "wind_direction": {"value": wind_dir, "color": get_color()},
+            "sunrise": {"value": sunrise, "color": get_color()},
+            "sunset": {"value": sunset, "color": get_color()},
+            "love_day": {"value": love_days, "color": get_color()},
+            "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1}天", "color": get_color()},
+            "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
 
-            "love1": {"value": love1},
-            "love2": {"value": love2},
+            "love1": {"value": love1, "color": get_color()},
+            "love2": {"value": love2, "color": get_color()},
 
-            "riddle_q1": {"value": riddle_q1},
-            "riddle_q2": {"value": riddle_q2},
-            "riddle_q3": {"value": riddle_q3},
-            "riddle_q4": {"value": riddle_q4},
+            "riddle_q1": {"value": riddle_q1, "color": get_color()},
+            "riddle_q2": {"value": riddle_q2, "color": get_color()},
+            "riddle_q3": {"value": riddle_q3, "color": get_color()},
+            "riddle_q4": {"value": riddle_q4, "color": get_color()},
 
-            "riddle_ans1": {"value": riddle_ans1},
-            "riddle_ans2": {"value": riddle_ans2}
+            "riddle_ans1": {"value": riddle_ans1, "color": get_color()},
+            "riddle_ans2": {"value": riddle_ans2, "color": get_color()}
         }
     }
 
@@ -180,9 +188,12 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
         try:
             res = requests.post(send_url, json=data, timeout=15)
             if res.json().get("errcode") == 0:
+                print(f"✅ 推送成功！")
                 return
         except:
             sleep(1)
+    print("❌ 推送失败")
+    sys.exit(1)
 
 if __name__ == "__main__":
     with open("config.txt", "r", encoding="utf-8") as f:
@@ -198,6 +209,6 @@ if __name__ == "__main__":
         openids = [openids]
 
     for oid in openids:
-        send_message(token, wt1, wt2, wt3, wt4, wt5, wt6, wt7,
+        send_message(oid, token, wt1, wt2, wt3, wt4, wt5, wt6, wt7,
                      love1, love2,
                      rq1, rq2, rq3, rq4, ra1, ra2)
