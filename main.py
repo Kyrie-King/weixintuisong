@@ -28,17 +28,15 @@ def get_access_token():
         access_token = response.json()['access_token']
     except KeyError:
         print("获取access_token失败，请检查app_id和app_secret是否正确")
-        os.system("pause")
         sys.exit(1)
     except Exception as e:
         print(f"获取access_token异常：{str(e)}")
-        os.system("pause")
         sys.exit(1)
     return access_token
 
 
 def get_weather(region):
-    """原有天气逻辑 + 新增最低/最高温、日出日落"""
+    """修复版天气函数，支持城市中文名查询"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -46,28 +44,25 @@ def get_weather(region):
     key = config["weather_key"]
     region_url = "https://api.qweather.com/v7/city/lookup?location={}&key={}".format(region, key)
     
-    # 1. 获取地区ID（原有逻辑）
     try:
         response = requests.get(region_url, headers=headers, timeout=10)
         response.raise_for_status()
         region_data = response.json()
         
         if region_data.get("code") == "404":
-            print(f"地区「{region}」未找到，请检查！")
-            os.system("pause")
-            sys.exit(1)
+            print(f"❌ 地区「{region}」未找到，请检查！")
+            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
         elif region_data.get("code") == "401":
-            print("和风天气key无效/过期，请检查！")
-            os.system("pause")
-            sys.exit(1)
+            print("❌ 和风天气key无效/过期，请检查！")
+            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
         elif region_data.get("code") != "200" or not region_data.get("location"):
-            print("获取地区ID失败，使用默认天气数据")
+            print("❌ 获取地区ID失败，使用默认天气数据")
             return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
         
         location_id = region_data["location"][0]["id"]
         
     except Exception as e:
-        print(f"获取地区ID异常：{str(e)}，使用默认数据")
+        print(f"❌ 获取地区ID异常：{str(e)}，使用默认数据")
         return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
 
     now_url = f"https://api.qweather.com/v7/weather/now?location={location_id}&key={key}"
@@ -120,7 +115,6 @@ def get_weather(region):
 def get_birthday(birthday_str, year, today):
     """计算生日倒计时 + 生日当天自动发送祝福"""
     try:
-        # 区分农历/公历
         if birthday_str.startswith("r"):
             _, month, day = birthday_str.split("-")
             lunar_date = ZhDate(year, int(month), int(day))
@@ -130,7 +124,6 @@ def get_birthday(birthday_str, year, today):
             _, month, day = birthday_str.split("-")
             birthday_date = date(year, int(month), int(day))
 
-        # 计算天数差
         if today > birthday_date:
             if birthday_str.startswith("r"):
                 next_lunar = ZhDate(year+1, int(month), int(day))
@@ -150,7 +143,7 @@ def get_birthday(birthday_str, year, today):
 
 
 def get_ciba():
-    """获取每日金句（原有功能）"""
+    """获取每日金句"""
     url = "http://open.iciba.com/dsapi/"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -182,7 +175,6 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         love_days = str((today - love_date).days)
     except Exception as e:
         print(f"计算在一起天数异常：{str(e)}")
-        os.system("pause")
         sys.exit(1)
 
     data = {
@@ -208,9 +200,7 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         }
     }
 
-    # ====================== 生日祝福核心逻辑（已增强） ======================
     try:
-        # birthday1
         if "birthday1" in config:
             b1_days = get_birthday(config["birthday1"]["birthday"], localtime().tm_year, today)
             if b1_days == "0":
@@ -219,7 +209,6 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
                 b1_text = f"距离{config['birthday1']['name']}生日还有{b1_days}天"
             data["data"]["birthday1"] = {"value": b1_text, "color": get_color()}
         
-        # birthday2
         if "birthday2" in config:
             b2_days = get_birthday(config["birthday2"]["birthday"], localtime().tm_year, today)
             if b2_days == "0":
@@ -229,7 +218,6 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
             data["data"]["birthday2"] = {"value": b2_text, "color": get_color()}
     except Exception as e:
         print(f"处理生日数据异常：{str(e)}")
-        os.system("pause")
         sys.exit(1)
 
     try:
@@ -250,29 +238,24 @@ if __name__ == "__main__":
             config = eval(f.read())
     except FileNotFoundError:
         print("找不到config.txt文件！")
-        os.system("pause")
         sys.exit(1)
     except SyntaxError:
         print("config.txt格式错误，请检查！")
-        os.system("pause")
         sys.exit(1)
     except Exception as e:
         print(f"读取配置异常：{str(e)}")
-        os.system("pause")
         sys.exit(1)
 
     must_have = ["app_id", "app_secret", "weather_key", "template_id", "user", "region", "love_date"]
     for key in must_have:
         if key not in config:
             print(f"配置缺失：{key}")
-            os.system("pause")
             sys.exit(1)
 
     access_token = get_access_token()
     users = config["user"]
     if not isinstance(users, list) or len(users) == 0:
         print("user字段必须是非空列表！")
-        os.system("pause")
         sys.exit(1)
 
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
@@ -284,5 +267,3 @@ if __name__ == "__main__":
 
     for user in users:
         send_message(user, access_token, config["region"], weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
-
-    os.system("pause")
