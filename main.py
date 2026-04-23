@@ -89,6 +89,38 @@ def get_weather():
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
 
 
+def get_birthday(birthday_str, year, today):
+    """计算生日倒计时 + 生日当天自动发送祝福"""
+    try:
+        # 区分农历/公历
+        if birthday_str.startswith("r"):
+            _, month, day = birthday_str.split("-")
+            lunar_date = ZhDate(year, int(month), int(day))
+            solar_date = lunar_date.to_datetime().date()
+            birthday_date = date(year, solar_date.month, solar_date.day)
+        else:
+            _, month, day = birthday_str.split("-")
+            birthday_date = date(year, int(month), int(day))
+
+        # 计算天数差
+        if today > birthday_date:
+            if birthday_str.startswith("r"):
+                next_lunar = ZhDate(year+1, int(month), int(day))
+                next_solar = next_lunar.to_datetime().date()
+                birthday_date = date(year+1, next_solar.month, next_solar.day)
+            else:
+                birthday_date = date(year+1, int(month), int(day))
+            days = str((birthday_date - today).days)
+        elif today == birthday_date:
+            days = "0"
+        else:
+            days = str((birthday_date - today).days)
+        return days
+    except Exception as e:
+        print(f"计算生日天数异常：{str(e)}")
+        return "未知"
+
+
 def get_ciba():
     """获取每日金句"""
     url = "http://open.iciba.com/dsapi/"
