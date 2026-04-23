@@ -28,11 +28,13 @@ def get_access_token():
         access_token = response.json()['access_token']
     except KeyError:
         print("获取access_token失败，请检查app_id和app_secret是否正确")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
     except Exception as e:
         print(f"获取access_token异常：{str(e)}")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
     return access_token
  
@@ -54,11 +56,13 @@ def get_weather(region):
         
         if region_data.get("code") == "404":
             print(f"地区「{region}」未找到，请检查！")
-            os.system("pause")
+            if sys.platform == "win32":
+                os.system("pause")
             sys.exit(1)
         elif region_data.get("code") == "401":
             print("和风天气key无效/过期，请检查！")
-            os.system("pause")
+            if sys.platform == "win32":
+                os.system("pause")
             sys.exit(1)
         elif region_data.get("code") != "200" or not region_data.get("location"):
             print("获取地区ID失败，使用默认天气数据")
@@ -190,7 +194,8 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         love_days = str((today - love_date).days)
     except Exception as e:
         print(f"计算在一起天数异常：{str(e)}")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
  
     # 组装模板数据（核心修改：新增city和wind_direction两个变量）
@@ -242,7 +247,8 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
             data["data"]["birthday2"] = {"value": b2_text, "color": get_color()}
     except Exception as e:
         print(f"处理生日数据异常：{str(e)}")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
  
     # 推送消息（原有逻辑）
@@ -265,15 +271,18 @@ if __name__ == "__main__":
             config = eval(f.read())
     except FileNotFoundError:
         print("找不到config.txt文件！")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
     except SyntaxError:
         print("config.txt格式错误，请检查！")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
     except Exception as e:
         print(f"读取配置异常：{str(e)}")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
  
     # 校验核心配置（原有字段，无新增）
@@ -281,7 +290,8 @@ if __name__ == "__main__":
     for key in must_have:
         if key not in config:
             print(f"配置缺失：{key}")
-            os.system("pause")
+            if sys.platform == "win32":
+                os.system("pause")
             sys.exit(1)
  
     # 执行核心流程（原有逻辑 + 传递新增参数）
@@ -289,7 +299,8 @@ if __name__ == "__main__":
     users = config["user"]
     if not isinstance(users, list) or len(users) == 0:
         print("user字段必须是非空列表！")
-        os.system("pause")
+        if sys.platform == "win32":
+            os.system("pause")
         sys.exit(1)
  
     # 获取天气（接收新增的4个返回值）
@@ -305,4 +316,6 @@ if __name__ == "__main__":
     for user in users:
         send_message(user, access_token, config["region"], weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
  
-    os.system("pause")
+    # 去掉最后一行的pause，或者改成跨平台的
+    if sys.platform == "win32":
+        os.system("pause")
