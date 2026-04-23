@@ -63,7 +63,7 @@ def get_weather(region):
     print(f"⚠️ 3次重试后天气接口异常，使用默认值")
     return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
 
-# 生日倒计时
+# 生日倒计时（新增是否当天生日的返回值）
 def get_birthday(birthday_str, year, today):
     try:
         if birthday_str.startswith("r"):
@@ -73,14 +73,18 @@ def get_birthday(birthday_str, year, today):
         else:
             m, d = birthday_str.split("-")
             birthday = date(year, int(m), int(d))
+        
+        # 判断是否是当天生日
+        is_today_birthday = (today == birthday)
+        
         if today > birthday:
             birthday = date(year + 1, birthday.month, birthday.day)
         days = str((birthday - today).days)
-        print(f"✅ 生日倒计时计算成功: {days}天")
-        return days
+        print(f"✅ 生日倒计时计算成功: {days}天 (当天生日: {is_today_birthday})")
+        return days, is_today_birthday
     except Exception as e:
         print(f"⚠️ 生日计算异常: {e}")
-        return "未知"
+        return "未知", False
 
 # 土味情话 两段
 def get_love_words():
@@ -153,7 +157,16 @@ def get_riddle():
     ans1, ans2 = split_two(a)
     return q1, q2, q3, q4, ans1, ans2
 
-# 发送微信消息（带详细日志+参数校验）
+# 获取生日祝福文案
+def get_birthday_wish(name):
+    wishes = [
+        f"🎉 祝{name}生日快乐！愿你岁岁年年，平安喜乐，万事胜意～",
+        f"🎂 {name}生日快乐！新的一岁，继续闪闪发光，被爱包围～",
+        f"🎁 恭喜{name}解锁新一岁！生日快乐，未来可期！"
+    ]
+    return random.choice(wishes)
+
+# 发送微信消息（新增生日模板切换逻辑）
 def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset,
                  love1, love2,
                  riddle_q1, riddle_q2, riddle_q3, riddle_q4,
@@ -179,12 +192,30 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
         print(f"⚠️ 在一起天数计算异常: {e}")
         love_days = "未知"
 
-    b1 = get_birthday(config["birthday1"]["birthday"], today.year, today)
-    b2 = get_birthday(config["birthday2"]["birthday"], today.year, today)
+    # 获取生日信息（包含是否当天生日）
+    b1_days, b1_is_today = get_birthday(config["birthday1"]["birthday"], today.year, today)
+    b2_days, b2_is_today = get_birthday(config["birthday2"]["birthday"], today.year, today)
+    
+    # 判断是否使用生日模板
+    use_birthday_template = False
+    birthday_wish = ""
+    if b1_is_today:
+        use_birthday_template = True
+        birthday_wish = get_birthday_wish(config["birthday1"]["name"])
+        print(f"🎂 今天是{config['birthday1']['name']}的生日，将使用生日模板推送")
+    elif b2_is_today:
+        use_birthday_template = True
+        birthday_wish = get_birthday_wish(config["birthday2"]["name"])
+        print(f"🎂 今天是{config['birthday2']['name']}的生日，将使用生日模板推送")
 
+    # 选择模板ID
+    template_id = config["birthday_template_id"] if use_birthday_template else config["template_id"]
+    print(f"🔍 选择模板ID: {'生日模板' if use_birthday_template else '日常模板'}")
+
+    # 构造消息数据
     data = {
         "touser": to_user,
-        "template_id": config["template_id"],
+        "template_id": template_id,
         "url": "",
         "topcolor": "#FF0000",
         "data": {
@@ -198,21 +229,22 @@ def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, 
             "sunrise": {"value": sunrise, "color": get_color()},
             "sunset": {"value": sunset, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
-            "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1}天", "color": get_color()},
-            "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
-
+            "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1_days}天", "color": get_color()},
+            "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2_days}天", "color": get_color()},
             "love1": {"value": love1, "color": get_color()},
             "love2": {"value": love2, "color": get_color()},
-
             "riddle_q1": {"value": riddle_q1, "color": get_color()},
             "riddle_q2": {"value": riddle_q2, "color": get_color()},
             "riddle_q3": {"value": riddle_q3, "color": get_color()},
             "riddle_q4": {"value": riddle_q4, "color": get_color()},
-
             "riddle_ans1": {"value": riddle_ans1, "color": get_color()},
             "riddle_ans2": {"value": riddle_ans2, "color": get_color()}
         }
     }
+
+    # 生日模板额外添加祝福字段
+    if use_birthday_template:
+        data["data"]["birthday_wish"] = {"value": birthday_wish, "color": "#FF6600"}  # 生日祝福用橙色
 
     for i in range(3):
         try:
@@ -237,6 +269,10 @@ if __name__ == "__main__":
         with open("config.txt", "r", encoding="utf-8") as f:
             config = eval(f.read())
         print(f"✅ 读取配置成功: {config.keys()}")
+        # 检查生日模板ID配置
+        if "birthday_template_id" not in config:
+            print("❌ 配置文件缺少birthday_template_id字段，请补充后重试")
+            sys.exit(1)
     except Exception as e:
         print(f"❌ 读取配置失败: {e}")
         sys.exit(1)
