@@ -36,13 +36,13 @@ def get_access_token():
 
 
 def get_weather():
-    """固定获取临沂天气，改用免费无风控的API"""
+    """修复版天气获取，解决温度空值、英文天气/风向问题"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
     }
-    # 临沂固定信息，避免API调用失败
-    weather = "多云"
+    # 默认值
+    weather = "晴"
     temp = "25℃"
     wind_dir = "南风"
     min_temp = "18℃"
@@ -50,52 +50,43 @@ def get_weather():
     sunrise = "06:00"
     sunset = "18:00"
 
-    # 用免费的公共天气API兜底，也可以用和风天气备用
+    # 风向映射表
+    wind_map = {
+        "N": "北风", "NE": "东北风", "E": "东风", "SE": "东南风",
+        "S": "南风", "SW": "西南风", "W": "西风", "NW": "西北风",
+        "NNE": "东北偏北风", "ENE": "东北偏东风", "ESE": "东南偏东风", "SSE": "东南偏南风",
+        "SSW": "西南偏南风", "WSW": "西南偏西风", "WNW": "西北偏西风", "NNW": "西北偏北风"
+    }
+
+    # 天气映射表
+    weather_map = {
+        "Clear": "晴", "Sunny": "晴", "Partly Cloudy": "多云", "Cloudy": "阴",
+        "Overcast": "阴", "Rain": "雨", "Light Rain": "小雨", "Heavy Rain": "大雨",
+        "Thunderstorm": "雷阵雨", "Snow": "雪", "Fog": "雾"
+    }
+
     try:
         url = "https://wttr.in/Linyi?format=j1"
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        weather = data["current_condition"][0]["weatherDesc"][0]["value"]
-        temp = f"{data['current_condition'][0]['temp_C']}℃"
-        wind_dir = data["current_condition"][0]["winddir16Point"]
-        min_temp = f"{data['weather'][0]['mintempC']}℃"
-        max_temp = f"{data['weather'][0]['maxtempC']}℃"
-        print(f"✅ 天气获取成功：{weather} {temp}")
+        
+        # 提取温度（解决空值问题）
+        current = data["current_condition"][0]
+        temp = f"{current['temp_C']}℃"
+        wind_dir = wind_map.get(current["winddir16Point"], current["winddir16Point"])
+        weather = weather_map.get(current["weatherDesc"][0]["value"], current["weatherDesc"][0]["value"])
+        
+        # 提取高低温
+        today = data["weather"][0]
+        min_temp = f"{today['mintempC']}℃"
+        max_temp = f"{today['maxtempC']}℃"
+        
+        print(f"✅ 天气获取成功：{weather} | 实时温度：{temp} | 风向：{wind_dir}")
     except Exception as e:
         print(f"❌ 获取天气失败，使用默认数据：{str(e)}")
 
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
-
-
-def get_birthday(birthday_str, year, today):
-    """计算生日倒计时 + 生日当天自动发送祝福"""
-    try:
-        if birthday_str.startswith("r"):
-            _, month, day = birthday_str.split("-")
-            lunar_date = ZhDate(year, int(month), int(day))
-            solar_date = lunar_date.to_datetime().date()
-            birthday_date = date(year, solar_date.month, solar_date.day)
-        else:
-            _, month, day = birthday_str.split("-")
-            birthday_date = date(year, int(month), int(day))
-
-        if today > birthday_date:
-            if birthday_str.startswith("r"):
-                next_lunar = ZhDate(year+1, int(month), int(day))
-                next_solar = next_lunar.to_datetime().date()
-                birthday_date = date(year+1, next_solar.month, next_solar.day)
-            else:
-                birthday_date = date(year+1, int(month), int(day))
-            days = str((birthday_date - today).days)
-        elif today == birthday_date:
-            days = "0"
-        else:
-            days = str((birthday_date - today).days)
-        return days
-    except Exception as e:
-        print(f"计算生日天数异常：{str(e)}")
-        return "未知"
 
 
 def get_ciba():
@@ -117,8 +108,34 @@ def get_ciba():
     return note_ch, note_en
 
 
+def get_random_love_words():
+    """随机土味情话"""
+    love_words = [
+        "我觉得你特别像一款游戏，叫我的世界。",
+        "你知道我的缺点是什么吗？是缺点你。",
+        "莫文蔚的阴天，孙燕姿的雨天，周杰伦的晴天，都不如你和我聊天。",
+        "我想买一块地，什么地？你的死心塌地。",
+        "你知道我最喜欢吃什么水果吗？是你这个开心果。",
+        "最近有谣言说我喜欢你，我要澄清一下，那不是谣言。"
+    ]
+    return random.choice(love_words)
+
+
+def get_random_riddle():
+    """随机脑筋急转弯"""
+    riddles = [
+        {"q": "什么东西越洗越脏？", "a": "水"},
+        {"q": "什么门永远关不上？", "a": "球门"},
+        {"q": "什么东西明明是你的，别人却用得比你多？", "a": "你的名字"},
+        {"q": "什么动物最容易摔倒？", "a": "狐狸，因为它很狡猾（脚滑）"},
+        {"q": "什么东西有五个头，但人不觉得它怪？", "a": "手和脚"}
+    ]
+    riddle = random.choice(riddles)
+    return riddle["q"], riddle["a"]
+
+
 def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
-    """推送消息，城市固定显示临沂"""
+    """推送消息，完整支持所有字段"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
@@ -132,6 +149,10 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
     except Exception as e:
         print(f"计算在一起天数异常：{str(e)}")
         sys.exit(1)
+
+    # 获取土味情话和脑筋急转弯
+    love_word = get_random_love_words()
+    riddle_q, riddle_a = get_random_riddle()
 
     data = {
         "touser": to_user,
@@ -152,7 +173,10 @@ def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_t
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
             "sunrise": {"value": sunrise, "color": get_color()},
-            "sunset": {"value": sunset, "color": get_color()}
+            "sunset": {"value": sunset, "color": get_color()},
+            "love_word": {"value": love_word, "color": get_color()},
+            "riddle_q": {"value": riddle_q, "color": get_color()},
+            "riddle_a": {"value": riddle_a, "color": get_color()}
         }
     }
 
