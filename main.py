@@ -35,35 +35,13 @@ def get_access_token():
     return access_token
 
 
-def get_weather(region):
-    """修复版天气函数，支持城市中文名查询"""
+def get_weather(location_id):
+    """直接用location_id获取天气，避免404"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
     }
     key = config["weather_key"]
-    region_url = "https://api.qweather.com/v7/city/lookup?location={}&key={}".format(region, key)
-    
-    try:
-        response = requests.get(region_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        region_data = response.json()
-        
-        if region_data.get("code") == "404":
-            print(f"❌ 地区「{region}」未找到，请检查！")
-            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
-        elif region_data.get("code") == "401":
-            print("❌ 和风天气key无效/过期，请检查！")
-            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
-        elif region_data.get("code") != "200" or not region_data.get("location"):
-            print("❌ 获取地区ID失败，使用默认天气数据")
-            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
-        
-        location_id = region_data["location"][0]["id"]
-        
-    except Exception as e:
-        print(f"❌ 获取地区ID异常：{str(e)}，使用默认数据")
-        return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
 
     now_url = f"https://api.qweather.com/v7/weather/now?location={location_id}&key={key}"
     daily_url = f"https://api.qweather.com/v7/weather/3d?location={location_id}&key={key}"
@@ -85,8 +63,9 @@ def get_weather(region):
             weather = now_data["now"]["text"]
             temp = f"{now_data['now']['temp']}℃"
             wind_dir = now_data["now"]["windDir"]
+            print(f"✅ 实时天气获取成功：{weather} {temp} {wind_dir}")
     except Exception as e:
-        print(f"获取实时天气失败：{str(e)}")
+        print(f"❌ 获取实时天气失败：{str(e)}")
 
     try:
         resp = requests.get(daily_url, headers=headers, timeout=10)
@@ -96,8 +75,9 @@ def get_weather(region):
             today_daily = daily_data["daily"][0]
             min_temp = f"{today_daily['tempMin']}℃"
             max_temp = f"{today_daily['tempMax']}℃"
+            print(f"✅ 温度获取成功：最低{min_temp} 最高{max_temp}")
     except Exception as e:
-        print(f"获取最低/最高温失败：{str(e)}")
+        print(f"❌ 获取最低/最高温失败：{str(e)}")
 
     try:
         resp = requests.get(astro_url, headers=headers, timeout=10)
@@ -106,8 +86,9 @@ def get_weather(region):
         if astro_data.get("code") == "200" and astro_data.get("sun"):
             sunrise = astro_data["sun"][0]["rise"]
             sunset = astro_data["sun"][0]["set"]
+            print(f"✅ 日出日落获取成功：{sunrise} {sunset}")
     except Exception as e:
-        print(f"获取日出日落失败：{str(e)}")
+        print(f"❌ 获取日出日落失败：{str(e)}")
     
     return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
 
@@ -161,7 +142,7 @@ def get_ciba():
     return note_ch, note_en
 
 
-def send_message(to_user, access_token, region, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
+def send_message(to_user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
     """推送消息 + 生日当天自动显示祝福"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
@@ -184,14 +165,14 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         "topcolor": "#FF0000",
         "data": {
             "date": {"value": date_str, "color": get_color()},
-            "region": {"value": region, "color": get_color()},
+            "region": {"value": "临沂", "color": get_color()},
             "weather": {"value": weather, "color": get_color()},
             "temp": {"value": temp, "color": get_color()},
             "wind_dir": {"value": wind_dir, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
             "note_en": {"value": note_en, "color": get_color()},
             "note_ch": {"value": note_ch, "color": get_color()},
-            "city": {"value": region, "color": get_color()},
+            "city": {"value": "临沂", "color": get_color()},
             "wind_direction": {"value": wind_dir, "color": get_color()},
             "min_temperature": {"value": min_temp, "color": get_color()},
             "max_temperature": {"value": max_temp, "color": get_color()},
@@ -246,7 +227,7 @@ if __name__ == "__main__":
         print(f"读取配置异常：{str(e)}")
         sys.exit(1)
 
-    must_have = ["app_id", "app_secret", "weather_key", "template_id", "user", "region", "love_date"]
+    must_have = ["app_id", "app_secret", "weather_key", "template_id", "user", "love_date"]
     for key in must_have:
         if key not in config:
             print(f"配置缺失：{key}")
@@ -258,7 +239,9 @@ if __name__ == "__main__":
         print("user字段必须是非空列表！")
         sys.exit(1)
 
-    weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(config["region"])
+    # 直接使用临沂官方location_id 101120101
+    location_id = "101120101"
+    weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather(location_id)
 
     note_ch = config.get("note_ch", "")
     note_en = config.get("note_en", "")
@@ -266,4 +249,4 @@ if __name__ == "__main__":
         note_ch, note_en = get_ciba()
 
     for user in users:
-        send_message(user, access_token, config["region"], weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
+        send_message(user, access_token, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en)
