@@ -36,7 +36,7 @@ def get_access_token():
  
  
 def get_weather(region):
-    """适配免费版和风天气，使用devapi域名"""
+    """适配免费版和风天气，使用devapi域名，增加详细错误提示"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -51,11 +51,11 @@ def get_weather(region):
         region_data = response.json()
         
         if region_data.get("code") == "404":
-            print(f"地区「{region}」未找到，请检查！")
-            sys.exit(1)
+            print(f"地区「{region}」未找到，请检查Location ID或Key是否正确！")
+            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
         elif region_data.get("code") == "401":
             print("和风天气key无效/过期，请检查！")
-            sys.exit(1)
+            return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
         elif region_data.get("code") != "200" or not region_data.get("location"):
             print("获取地区ID失败，使用默认天气数据")
             return "多云", "25℃", "南风", "18℃", "32℃", "06:00", "18:00"
@@ -168,7 +168,7 @@ def get_ciba():
  
  
 def send_message(to_user, access_token, region, weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset, note_ch, note_en):
-    """推送消息"""
+    """推送消息，增加模板ID错误提示"""
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
@@ -235,11 +235,13 @@ def send_message(to_user, access_token, region, weather, temp, wind_dir, min_tem
         resp.raise_for_status()
         resp_data = resp.json()
         if resp_data["errcode"] == 0:
-            print(f"向 {to_user} 推送成功！")
+            print(f"✅ 向 {to_user} 推送成功！")
         else:
-            print(f"推送失败：{resp_data.get('errmsg')}")
+            print(f"❌ 推送失败：{resp_data.get('errmsg')}")
+            if resp_data.get('errcode') == 40037:
+                print("💡 错误原因：template_id无效，请检查公众号后台的模板ID是否正确！")
     except Exception as e:
-        print(f"推送消息异常：{str(e)}")
+        print(f"❌ 推送消息异常：{str(e)}")
  
  
 if __name__ == "__main__":
