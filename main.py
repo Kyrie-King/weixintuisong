@@ -5,40 +5,41 @@ from datetime import date
 from zhdate import ZhDate
 import sys
 
-# 随机颜色
 def get_color():
     return "#" + "%06x" % random.randint(0, 0xFFFFFF)
 
-# 获取微信token
 def get_access_token(app_id, app_secret):
     url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
     try:
         res = requests.get(url, timeout=10).json()
         return res["access_token"]
     except:
-        print("获取token失败")
+        print("❌ 获取token失败")
         sys.exit()
 
-# 真实调用天气API，无兜底，失败直接返回失败
 def get_weather():
     try:
+        # 严格调用 wttr.in 接口
         url = "https://wttr.in/Linyi?format=j1"
         data = requests.get(url, timeout=10).json()
-        
-        weather = data["current_condition"][0]["weatherDesc"][0]["value"]
-        temp = data["current_condition"][0]["temp_C"] + "℃"
-        wind_dir = data["current_condition"][0]["winddir16Point"]
-        min_temp = data["weather"][0]["mintempC"] + "℃"
-        max_temp = data["weather"][0]["maxtempC"] + "℃"
+
+        # 字段完全匹配接口返回
+        current = data["current_condition"][0]
+        today = data["weather"][0]
+
+        weather = current["weatherDesc"][0]["value"]
+        temp = f"{current['temp_C']}℃"
+        wind_dir = current["winddir16Point"]
+        min_temp = f"{today['mintempC']}℃"
+        max_temp = f"{today['maxtempC']}℃"
         sunrise = "06:00"
         sunset = "18:00"
 
         return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
-    except:
-        # 获取失败就返回失败文本
+    except Exception as e:
+        print(f"❌ 天气获取失败：{e}")
         return "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败"
 
-# 生日计算
 def get_birthday(birthday_str, year, today):
     try:
         if birthday_str.startswith("r"):
@@ -53,13 +54,19 @@ def get_birthday(birthday_str, year, today):
             birthday = date(year + 1, birthday.month, birthday.day)
         days = (birthday - today).days
         return str(days) if days != 0 else "0"
-    except:
+    except Exception as e:
+        print(f"❌ 生日计算失败：{e}")
         return "获取失败"
 
-# 主程序
 def main():
     with open("config.txt", encoding="utf-8") as f:
         config = eval(f.read())
+
+    must_have = ["app_id", "app_secret", "template_id", "user", "love_date"]
+    for key in must_have:
+        if key not in config:
+            print(f"❌ 配置缺失：{key}")
+            sys.exit(1)
 
     app_id = config["app_id"]
     app_secret = config["app_secret"]
@@ -76,13 +83,14 @@ def main():
     try:
         ly, lm, ld = map(int, love_date.split("-"))
         love_days = str((today - date(ly, lm, ld)).days)
-    except:
+    except Exception as e:
+        print(f"❌ 在一起天数计算失败：{e}")
         love_days = "获取失败"
 
-    # 天气（纯接口调用）
+    # 天气（严格调用，字段匹配）
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather()
 
-    # 生日
+    # 生日文本
     birthday1 = ""
     if "birthday1" in config:
         days = get_birthday(config["birthday1"]["birthday"], today.year, today)
@@ -99,29 +107,35 @@ def main():
         else:
             birthday2 = f"距离{config['birthday2']['name']}生日还有{days}天"
 
-    # 推送数据
+    # 推送数据（字段和模板一一对应）
     data = {
         "touser": user,
         "template_id": template_id,
+        "url": "https://github.com",
+        "topcolor": "#FF0000",
         "data": {
-            "date": {"value": date_str},
-            "city": {"value": "临沂"},
-            "weather": {"value": weather},
-            "temp": {"value": temp},
-            "wind_dir": {"value": wind_dir},
-            "min_temp": {"value": min_temp},
-            "max_temp": {"value": max_temp},
-            "sunrise": {"value": sunrise},
-            "sunset": {"value": sunset},
-            "love_day": {"value": love_days},
-            "birthday1": {"value": birthday1},
-            "birthday2": {"value": birthday2},
+            "date": {"value": date_str, "color": get_color()},
+            "city": {"value": "临沂", "color": get_color()},
+            "weather": {"value": weather, "color": get_color()},
+            "temp": {"value": temp, "color": get_color()},
+            "wind_dir": {"value": wind_dir, "color": get_color()},
+            "min_temp": {"value": min_temp, "color": get_color()},
+            "max_temp": {"value": max_temp, "color": get_color()},
+            "sunrise": {"value": sunrise, "color": get_color()},
+            "sunset": {"value": sunset, "color": get_color()},
+            "love_day": {"value": love_days, "color": get_color()},
+            "birthday1": {"value": birthday1, "color": get_color()},
+            "birthday2": {"value": birthday2, "color": get_color()}
         }
     }
 
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
-    requests.post(url, json=data)
-    print("推送完成")
+    try:
+        resp = requests.post(url, json=data, timeout=10)
+        resp.raise_for_status()
+        print("✅ 推送成功：", resp.json())
+    except Exception as e:
+        print(f"❌ 推送失败：{e}")
 
 if __name__ == "__main__":
     main()
