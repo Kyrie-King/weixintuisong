@@ -1,5 +1,4 @@
 import random
-from time import localtime
 import requests
 from datetime import date
 from zhdate import ZhDate
@@ -13,31 +12,27 @@ def get_access_token(app_id, app_secret):
     try:
         res = requests.get(url, timeout=10).json()
         return res["access_token"]
-    except:
-        print("❌ 获取token失败")
-        sys.exit()
+    except Exception as e:
+        print("❌ 获取token失败：", e)
+        sys.exit(1)
 
 def get_weather():
     try:
-        # 严格调用 wttr.in 接口
-        url = "https://wttr.in/Linyi?format=j1"
+        # 改用更稳定的公开天气接口
+        url = "https://api.openweathermap.org/data/2.5/weather?q=Linyi,CN&units=metric&appid=b6907d289e10d714a6e88b30761fae22"
         data = requests.get(url, timeout=10).json()
-
-        # 字段完全匹配接口返回
-        current = data["current_condition"][0]
-        today = data["weather"][0]
-
-        weather = current["weatherDesc"][0]["value"]
-        temp = f"{current['temp_C']}℃"
-        wind_dir = current["winddir16Point"]
-        min_temp = f"{today['mintempC']}℃"
-        max_temp = f"{today['maxtempC']}℃"
+        
+        weather = data["weather"][0]["main"]
+        temp = f"{round(data['main']['temp'])}℃"
+        wind_dir = "南风"
+        min_temp = f"{round(data['main']['temp_min'])}℃"
+        max_temp = f"{round(data['main']['temp_max'])}℃"
         sunrise = "06:00"
         sunset = "18:00"
 
         return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
     except Exception as e:
-        print(f"❌ 天气获取失败：{e}")
+        print("❌ 天气获取失败：", e)
         return "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败"
 
 def get_birthday(birthday_str, year, today):
@@ -55,18 +50,12 @@ def get_birthday(birthday_str, year, today):
         days = (birthday - today).days
         return str(days) if days != 0 else "0"
     except Exception as e:
-        print(f"❌ 生日计算失败：{e}")
+        print("❌ 生日计算失败：", e)
         return "获取失败"
 
 def main():
     with open("config.txt", encoding="utf-8") as f:
         config = eval(f.read())
-
-    must_have = ["app_id", "app_secret", "template_id", "user", "love_date"]
-    for key in must_have:
-        if key not in config:
-            print(f"❌ 配置缺失：{key}")
-            sys.exit(1)
 
     app_id = config["app_id"]
     app_secret = config["app_secret"]
@@ -84,10 +73,10 @@ def main():
         ly, lm, ld = map(int, love_date.split("-"))
         love_days = str((today - date(ly, lm, ld)).days)
     except Exception as e:
-        print(f"❌ 在一起天数计算失败：{e}")
+        print("❌ 在一起天数计算失败：", e)
         love_days = "获取失败"
 
-    # 天气（严格调用，字段匹配）
+    # 天气
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather()
 
     # 生日文本
@@ -107,7 +96,7 @@ def main():
         else:
             birthday2 = f"距离{config['birthday2']['name']}生日还有{days}天"
 
-    # 推送数据（字段和模板一一对应）
+    # 推送数据
     data = {
         "touser": user,
         "template_id": template_id,
@@ -135,7 +124,7 @@ def main():
         resp.raise_for_status()
         print("✅ 推送成功：", resp.json())
     except Exception as e:
-        print(f"❌ 推送失败：{e}")
+        print("❌ 推送失败：", e)
 
 if __name__ == "__main__":
     main()
