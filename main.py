@@ -28,7 +28,7 @@ def get_weather(city_code, gaode_key):
         today = forecast["casts"][0]
 
         weather = today["dayweather"]
-        temp = f"{today['daytemp']}℃"  # 加上℃
+        temp = f"{today['daytemp']}℃"
         wind_dir = today["daywind"] + "风"
         min_temp = f"{today['nighttemp']}℃"
         max_temp = f"{today['daytemp']}℃"
@@ -62,14 +62,19 @@ def get_random_love_words():
     love_words = [
         "我喜欢你，胜于昨日，略匮明朝。",
         "你是我明目张胆的偏爱，众所周知的私心。",
-        "一想到能和你共度余生，我就对余生充满期待。"
+        "一想到能和你共度余生，我就对余生充满期待。",
+        "世界那么大，遇见你不容易，我不想错过。",
+        "我想把所有温柔和浪漫都给你。"
     ]
     return random.choice(love_words)
 
 def get_random_riddle():
     riddles = [
         ("什么门永远关不上？", "球门"),
-        ("什么东西越洗越脏？", "水")
+        ("什么东西越洗越脏？", "水"),
+        ("什么水永远用不完？", "泪水"),
+        ("什么路最窄？", "冤家路窄"),
+        ("什么瓜不能吃？", "傻瓜")
     ]
     return random.choice(riddles)
 
@@ -97,7 +102,7 @@ def main():
         print("❌ 在一起天数计算失败：", e)
         love_days = "获取失败"
 
-    # 天气
+    # 天气（带℃单位）
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather("371300", gaode_key)
 
     # 生日文案
@@ -121,7 +126,7 @@ def main():
     love_word = get_random_love_words()
     riddle_q, riddle_a = get_random_riddle()
 
-    # 推送数据（包含所有字段）
+    # 推送数据（和模板字段完全对应）
     data = {
         "touser": user,
         "template_id": template_id,
