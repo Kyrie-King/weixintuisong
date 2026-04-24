@@ -1,78 +1,3 @@
-import random
-import requests
-from datetime import date
-from zhdate import ZhDate
-import sys
-
-def get_color():
-    return "#" + "%06x" % random.randint(0, 0xFFFFFF)
-
-def get_access_token(app_id, app_secret):
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
-    try:
-        res = requests.get(url, timeout=10).json()
-        return res["access_token"]
-    except Exception as e:
-        print("❌ 获取token失败：", e)
-        sys.exit(1)
-
-def get_weather(city_code, gaode_key):
-    try:
-        url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={city_code}&key={gaode_key}&extensions=all"
-        data = requests.get(url, timeout=10).json()
-
-        if data["status"] != "1":
-            raise Exception("高德接口返回失败")
-
-        forecast = data["forecasts"][0]
-        today = forecast["casts"][0]
-
-        weather = today["dayweather"]
-        temp = f"{today['daytemp']}℃"
-        wind_dir = today["daywind"] + "风"
-        min_temp = f"{today['nighttemp']}℃"
-        max_temp = f"{today['daytemp']}℃"
-        sunrise = "06:00"
-        sunset = "18:00"
-
-        return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
-    except Exception as e:
-        print("❌ 天气获取失败：", e)
-        return "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败", "获取失败"
-
-def get_birthday(birthday_str, year, today):
-    try:
-        if birthday_str.startswith("r"):
-            _, m, d = birthday_str.split("-")
-            lunar = ZhDate(year, int(m), int(d))
-            birthday = lunar.to_datetime().date()
-        else:
-            _, m, d = birthday_str.split("-")
-            birthday = date(year, int(m), int(d))
-
-        if today > birthday:
-            birthday = date(year + 1, birthday.month, birthday.day)
-        days = (birthday - today).days
-        return str(days) if days != 0 else "0"
-    except Exception as e:
-        print("❌ 生日计算失败：", e)
-        return "获取失败"
-
-def get_random_love_words():
-    love_words = [
-        "我喜欢你，胜于昨日，略匮明朝。",
-        "你是我明目张胆的偏爱，众所周知的私心。",
-        "一想到能和你共度余生，我就对余生充满期待。"
-    ]
-    return random.choice(love_words)
-
-def get_random_riddle():
-    riddles = [
-        ("什么门永远关不上？", "球门"),
-        ("什么东西越洗越脏？", "水")
-    ]
-    return random.choice(riddles)
-
 def main():
     with open("config.txt", encoding="utf-8") as f:
         config = eval(f.read())
@@ -117,9 +42,10 @@ def main():
         else:
             birthday2 = f"距离{config['birthday2']['name']}生日还有{days}天"
 
-    # 情话和脑筋急转弯
-    love_word = get_random_love_words()
-    riddle_q, riddle_a = get_random_riddle()
+    # 情话和脑筋急转弯（固定赋值，避免为空）
+    love_word = "我喜欢你，胜于昨日，略匮明朝。"
+    riddle_q = "什么门永远关不上？"
+    riddle_a = "球门"
 
     # 推送数据（与模板字段完全对应）
     data = {
@@ -146,6 +72,11 @@ def main():
         }
     }
 
+    # 关键：打印完整的推送数据！
+    print("===== 推送数据详情 =====")
+    print(data)
+    print("=======================")
+
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     try:
         resp = requests.post(url, json=data, timeout=10)
@@ -153,6 +84,3 @@ def main():
         print("✅ 推送成功：", resp.json())
     except Exception as e:
         print("❌ 推送失败：", e)
-
-if __name__ == "__main__":
-    main()
