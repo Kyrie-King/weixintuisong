@@ -16,17 +16,23 @@ def get_access_token(app_id, app_secret):
         print("❌ 获取token失败：", e)
         sys.exit(1)
 
-def get_weather():
+# 改用国内免费的高德天气接口，GitHub Actions 里不会被墙
+def get_weather(city_code, gaode_key):
     try:
-        # 改用更稳定的公开天气接口
-        url = "https://api.openweathermap.org/data/2.5/weather?q=Linyi,CN&units=metric&appid=b6907d289e10d714a6e88b30761fae22"
+        url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={city_code}&key={gaode_key}&extensions=all"
         data = requests.get(url, timeout=10).json()
-        
-        weather = data["weather"][0]["main"]
-        temp = f"{round(data['main']['temp'])}℃"
-        wind_dir = "南风"
-        min_temp = f"{round(data['main']['temp_min'])}℃"
-        max_temp = f"{round(data['main']['temp_max'])}℃"
+
+        if data["status"] != "1":
+            raise Exception("高德接口返回失败")
+
+        forecast = data["forecasts"][0]
+        today = forecast["casts"][0]
+
+        weather = today["dayweather"]
+        temp = f"{today['daytemp']}℃"
+        wind_dir = today["daywind"] + "风"
+        min_temp = f"{today['nighttemp']}℃"
+        max_temp = f"{today['daytemp']}℃"
         sunrise = "06:00"
         sunset = "18:00"
 
@@ -57,11 +63,18 @@ def main():
     with open("config.txt", encoding="utf-8") as f:
         config = eval(f.read())
 
+    must_have = ["app_id", "app_secret", "template_id", "user", "love_date", "gaode_key"]
+    for key in must_have:
+        if key not in config:
+            print(f"❌ 配置缺失：{key}")
+            sys.exit(1)
+
     app_id = config["app_id"]
     app_secret = config["app_secret"]
     template_id = config["template_id"]
     user = config["user"][0]
     love_date = config["love_date"]
+    gaode_key = config["gaode_key"]
 
     access_token = get_access_token(app_id, app_secret)
     today = date.today()
@@ -76,8 +89,8 @@ def main():
         print("❌ 在一起天数计算失败：", e)
         love_days = "获取失败"
 
-    # 天气
-    weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather()
+    # 临沂的高德城市编码：371300
+    weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather("371300", gaode_key)
 
     # 生日文本
     birthday1 = ""
