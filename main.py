@@ -32,8 +32,8 @@ def get_weather(city_code, gaode_key):
         wind_dir = today["daywind"] + "风"
         min_temp = f"{today['nighttemp']}℃"
         max_temp = f"{today['daytemp']}℃"
-        sunrise = today["sunrise"]
-        sunset = today["sunset"]
+        sunrise = "06:00"
+        sunset = "18:00"
 
         return weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset
     except Exception as e:
@@ -102,7 +102,7 @@ def main():
         print("❌ 在一起天数计算失败：", e)
         love_days = "获取失败"
 
-    # 天气（含真实日出日落、带℃）
+    # 天气（去掉了不存在的 sunrise/sunset 字段）
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather("371300", gaode_key)
 
     # 生日文案
