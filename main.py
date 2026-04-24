@@ -16,7 +16,6 @@ def get_access_token(app_id, app_secret):
         print("❌ 获取token失败：", e)
         sys.exit(1)
 
-# 改用国内免费的高德天气接口，GitHub Actions 里不会被墙
 def get_weather(city_code, gaode_key):
     try:
         url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={city_code}&key={gaode_key}&extensions=all"
@@ -29,7 +28,7 @@ def get_weather(city_code, gaode_key):
         today = forecast["casts"][0]
 
         weather = today["dayweather"]
-        temp = f"{today['daytemp']}℃"
+        temp = f"{today['daytemp']}℃"  # 加上℃
         wind_dir = today["daywind"] + "风"
         min_temp = f"{today['nighttemp']}℃"
         max_temp = f"{today['daytemp']}℃"
@@ -59,15 +58,24 @@ def get_birthday(birthday_str, year, today):
         print("❌ 生日计算失败：", e)
         return "获取失败"
 
+def get_random_love_words():
+    love_words = [
+        "我喜欢你，胜于昨日，略匮明朝。",
+        "你是我明目张胆的偏爱，众所周知的私心。",
+        "一想到能和你共度余生，我就对余生充满期待。"
+    ]
+    return random.choice(love_words)
+
+def get_random_riddle():
+    riddles = [
+        ("什么门永远关不上？", "球门"),
+        ("什么东西越洗越脏？", "水")
+    ]
+    return random.choice(riddles)
+
 def main():
     with open("config.txt", encoding="utf-8") as f:
         config = eval(f.read())
-
-    must_have = ["app_id", "app_secret", "template_id", "user", "love_date", "gaode_key"]
-    for key in must_have:
-        if key not in config:
-            print(f"❌ 配置缺失：{key}")
-            sys.exit(1)
 
     app_id = config["app_id"]
     app_secret = config["app_secret"]
@@ -89,10 +97,10 @@ def main():
         print("❌ 在一起天数计算失败：", e)
         love_days = "获取失败"
 
-    # 临沂的高德城市编码：371300
+    # 天气
     weather, temp, wind_dir, min_temp, max_temp, sunrise, sunset = get_weather("371300", gaode_key)
 
-    # 生日文本
+    # 生日文案
     birthday1 = ""
     if "birthday1" in config:
         days = get_birthday(config["birthday1"]["birthday"], today.year, today)
@@ -109,7 +117,11 @@ def main():
         else:
             birthday2 = f"距离{config['birthday2']['name']}生日还有{days}天"
 
-    # 推送数据
+    # 情话和脑筋急转弯
+    love_word = get_random_love_words()
+    riddle_q, riddle_a = get_random_riddle()
+
+    # 推送数据（包含所有字段）
     data = {
         "touser": user,
         "template_id": template_id,
@@ -127,7 +139,10 @@ def main():
             "sunset": {"value": sunset, "color": get_color()},
             "love_day": {"value": love_days, "color": get_color()},
             "birthday1": {"value": birthday1, "color": get_color()},
-            "birthday2": {"value": birthday2, "color": get_color()}
+            "birthday2": {"value": birthday2, "color": get_color()},
+            "love_word": {"value": love_word, "color": get_color()},
+            "riddle_q": {"value": riddle_q, "color": get_color()},
+            "riddle_a": {"value": riddle_a, "color": get_color()}
         }
     }
 
