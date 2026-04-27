@@ -1,212 +1,233 @@
 import random
-from time import localtime, sleep
-import requests
-from datetime import date
+from time import localtime
+from requests import get, post
+from datetime import datetime, date
 from zhdate import ZhDate
 import sys
 import os
-
+ 
+ 
 def get_color():
-    return "#000000"
-
+    # 获取随机颜色
+    get_colors = lambda n: list(map(lambda i: "#" + "%06x" % random.randint(0, 0xFFFFFF), range(n)))
+    color_list = get_colors(100)
+    return random.choice(color_list)
+ 
+ 
 def get_access_token():
-    """获取微信接口调用凭证"""
+    # appId
     app_id = config["app_id"]
+    # appSecret
     app_secret = config["app_secret"]
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
-    for i in range(3):
-        try:
-            res = requests.get(url, timeout=30)
-            res.raise_for_status()  # 抛出HTTP异常
-            result = res.json()
-            if "access_token" in result:
-                return result["access_token"]
-            else:
-                print(f"获取token失败: {result}")
-        except Exception as e:
-            print(f"获取token异常({i+1}/3): {e}")
-            sleep(2)
-    sys.exit("❌ 多次获取access_token失败，退出程序")
-
+    post_url = ("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}"
+                .format(app_id, app_secret))
+    try:
+        access_token = get(post_url).json()['access_token']
+    except KeyError:
+        print("获取access_token失败，请检查app_id和app_secret是否正确")
+        os.system("pause")
+        sys.exit(1)
+    # print(access_token)
+    return access_token
+ 
+ 
 def get_weather(region):
-    """获取天气数据（替换为和风天气接口，更稳定）"""
-    # 和风天气API配置（需要在config.txt里配置weather_key）
-    weather_key = config.get("weather_key", "")
-    city_code = config.get("city_code", "101120901")  # 临沂的城市编码
-    url = f"https://devapi.qweather.com/v7/weather/now?location={city_code}&key={weather_key}"
-    # 预报接口（获取最高/最低温、日出日落）
-    forecast_url = f"https://devapi.qweather.com/v7/weather/3d?location={city_code}&key={weather_key}"
-    
-    # 初始化默认值（确保字段都有值）
-    real_temp = "未知"
-    min_temp = "未知"
-    max_temp = "未知"
-    weather = "未知"
-    wind_dir = "未知"
-    sunrise = "未知"
-    sunset = "未知"
-
-    # 1. 获取实时天气
-    try:
-        res = requests.get(url, timeout=30)
-        res.raise_for_status()
-        now_data = res.json()
-        if now_data.get("code") == "200":
-            real_temp = now_data["now"]["temp"]  # 实时气温
-            weather = now_data["now"]["text"]    # 天气状况
-            wind_dir = now_data["now"]["windDir"]  # 风向
-    except Exception as e:
-        print(f"获取实时天气失败: {e}")
-
-    # 2. 获取预报数据（最高/最低温、日出日落）
-    try:
-        res = requests.get(forecast_url, timeout=30)
-        res.raise_for_status()
-        forecast_data = res.json()
-        if forecast_data.get("code") == "200":
-            today_forecast = forecast_data["daily"][0]
-            min_temp = today_forecast["tempMin"]  # 最低温
-            max_temp = today_forecast["tempMax"]  # 最高温
-            sunrise = today_forecast["sunrise"]   # 日出
-            sunset = today_forecast["sunset"]     # 日落
-    except Exception as e:
-        print(f"获取预报天气失败: {e}")
-
-    return real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset
-
-def get_birthday(birthday_str, year, today):
-    """计算生日剩余天数（支持农历，前缀r）"""
-    try:
-        if birthday_str.startswith("r"):
-            _, m, d = birthday_str.split("-")
-            lunar = ZhDate(year, int(m), int(d)).to_datetime().date()
-            birthday = date(year, lunar.month, lunar.day)
-        else:
-            m, d = birthday_str.split("-")
-            birthday = date(year, int(m), int(d))
-        if today > birthday:
-            birthday = date(year + 1, birthday.month, birthday.day)
-        return str((birthday - today).days)
-    except Exception as e:
-        print(f"计算生日失败: {e}")
-        return "未知"
-
-def get_zaoan():
-    """获取早安文案（天行数据）"""
-    API_KEY = config.get("tianapi_key", "769e688a2a945817a2b8140e853b78eb")
-    url = f"https://apis.tianapi.com/zaoan/index?key={API_KEY}"
-    for i in range(3):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
+    }
+    key = config["weather_key"]
+    region_url = "https://geoapi.qweather.com/v2/city/lookup?location={}&key={}".format(region, key)
+    response = get(region_url, headers=headers).json()
+    if response["code"] == "404":
+        print("推送消息失败，请检查地区名是否有误！")
+        os.system("pause")
+        sys.exit(1)
+    elif response["code"] == "401":
+        print("推送消息失败，请检查和风天气key是否正确！")
+        os.system("pause")
+        sys.exit(1)
+    else:
+        # 获取地区的location--id
+        location_id = response["location"][0]["id"]
+    weather_url = "https://devapi.qweather.com/v7/weather/now?location={}&key={}".format(location_id, key)
+    response = get(weather_url, headers=headers).json()
+    # 天气
+    weather = response["now"]["text"]
+    # 当前温度
+    temp = response["now"]["temp"] + u"\N{DEGREE SIGN}" + "C"
+    # 风向
+    wind_dir = response["now"]["windDir"]
+    return weather, temp, wind_dir
+ 
+ 
+def get_birthday(birthday, year, today):
+    birthday_year = birthday.split("-")[0]
+    # 判断是否为农历生日
+    if birthday_year[0] == "r":
+        r_mouth = int(birthday.split("-")[1])
+        r_day = int(birthday.split("-")[2])
+        # 获取农历生日的今年对应的月和日
         try:
-            res = requests.get(url, timeout=30)
-            res.raise_for_status()
-            data = res.json()
-            if data.get("code") == 200:
-                content = data["result"]["content"]
-                # 拆分文案（避免过长）
-                content = content.ljust(64)  # 补空格确保长度足够
-                return content[:16], content[16:32], content[32:48], content[48:64]
-        except Exception as e:
-            print(f"获取早安文案异常({i+1}/3): {e}")
-            sleep(2)
-    return "早安呀～", "今天也要开心✨", "爱你哟❤️", "记得按时吃饭～"
-
-def send_message(to_user, access_token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, note_ch1, note_ch2, note_ch3, note_ch4):
-    """发送微信模板消息"""
-    send_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
-    today = date(localtime().tm_year, localtime().tm_mon, localtime().tm_mday)
-    week_list = ["周日","周一","周二","周三","周四","周五","周六"]
-    date_str = f"{today} {week_list[today.weekday()]}"
-    
-    # 计算恋爱天数
-    try:
-        love = date(*map(int, config["love_date"].split("-")))
-        love_days = str((today - love).days)
-    except Exception as e:
-        print(f"计算恋爱天数失败: {e}")
-        love_days = "未知"
-
-    # 计算生日剩余天数
-    b1 = get_birthday(config["birthday1"]["birthday"], today.year, today)
-    b2 = get_birthday(config["birthday2"]["birthday"], today.year, today)
-
-    # 修正模板字段名（匹配截图里的显示字段）
+            birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
+        except TypeError:
+            print("请检查生日的日子是否在今年存在")
+            os.system("pause")
+            sys.exit(1)
+        birthday_month = birthday.month
+        birthday_day = birthday.day
+        # 今年生日
+        year_date = date(year, birthday_month, birthday_day)
+ 
+    else:
+        # 获取国历生日的今年对应月和日
+        birthday_month = int(birthday.split("-")[1])
+        birthday_day = int(birthday.split("-")[2])
+        # 今年生日
+        year_date = date(year, birthday_month, birthday_day)
+    # 计算生日年份，如果还没过，按当年减，如果过了需要+1
+    if today > year_date:
+        if birthday_year[0] == "r":
+            # 获取农历明年生日的月和日
+            r_last_birthday = ZhDate((year + 1), r_mouth, r_day).to_datetime().date()
+            birth_date = date((year + 1), r_last_birthday.month, r_last_birthday.day)
+        else:
+            birth_date = date((year + 1), birthday_month, birthday_day)
+        birth_day = str(birth_date.__sub__(today)).split(" ")[0]
+    elif today == year_date:
+        birth_day = 0
+    else:
+        birth_date = year_date
+        birth_day = str(birth_date.__sub__(today)).split(" ")[0]
+    return birth_day
+ 
+ 
+def get_ciba():
+    url = "http://open.iciba.com/dsapi/"
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
+    }
+    r = get(url, headers=headers)
+    note_en = r.json()["content"]
+    note_ch = r.json()["note"]
+    return note_ch, note_en
+ 
+ 
+def send_message(to_user, access_token, region_name, weather, temp, wind_dir, note_ch, note_en):
+    url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
+    week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
+    year = localtime().tm_year
+    month = localtime().tm_mon
+    day = localtime().tm_mday
+    today = datetime.date(datetime(year=year, month=month, day=day))
+    week = week_list[today.isoweekday() % 7]
+    # 获取在一起的日子的日期格式
+    love_year = int(config["love_date"].split("-")[0])
+    love_month = int(config["love_date"].split("-")[1])
+    love_day = int(config["love_date"].split("-")[2])
+    love_date = date(love_year, love_month, love_day)
+    # 获取在一起的日期差
+    love_days = str(today.__sub__(love_date)).split(" ")[0]
+    # 获取所有生日数据
+    birthdays = {}
+    for k, v in config.items():
+        if k[0:5] == "birth":
+            birthdays[k] = v
     data = {
         "touser": to_user,
         "template_id": config["template_id"],
-        "url": "",
+        "url": "http://weixin.qq.com/download",
         "topcolor": "#FF0000",
         "data": {
-            "date": {"value": date_str, "color": get_color()},
-            "city": {"value": config.get("city_name", "临沂市"), "color": get_color()},
-            "weather": {"value": weather, "color": get_color()},
-            "real_temp": {"value": real_temp + "℃", "color": get_color()},  # 实时气温（加单位）
-            "min_temperature": {"value": min_temp + "℃", "color": get_color()},  # 最低气温
-            "max_temperature": {"value": max_temp + "℃", "color": get_color()},  # 最高气温
-            "wind_direction": {"value": wind_dir, "color": get_color()},  # 当前风向
-            "sunrise": {"value": sunrise, "color": get_color()},
-            "sunset": {"value": sunset, "color": get_color()},
-            "love_day": {"value": love_days, "color": get_color()},
-            "birthday1": {"value": f"{config['birthday1']['name']}生日还有{b1}天", "color": get_color()},
-            "birthday2": {"value": f"{config['birthday2']['name']}生日还有{b2}天", "color": get_color()},
-            "note_ch": {"value": note_ch1, "color": get_color()},
-            "note_ch2": {"value": note_ch2, "color": get_color()},
-            "note_ch3": {"value": note_ch3, "color": get_color()},
-            "note_ch4": {"value": note_ch4, "color": get_color()},
+            "date": {
+                "value": "{} {}".format(today, week),
+                "color": get_color()
+            },
+            "region": {
+                "value": region_name,
+                "color": get_color()
+            },
+            "weather": {
+                "value": weather,
+                "color": get_color()
+            },
+            "temp": {
+                "value": temp,
+                "color": get_color()
+            },
+            "wind_dir": {
+                "value": wind_dir,
+                "color": get_color()
+            },
+            "love_day": {
+                "value": love_days,
+                "color": get_color()
+            },
+            "note_en": {
+                "value": note_en,
+                "color": get_color()
+            },
+            "note_ch": {
+                "value": note_ch,
+                "color": get_color()
+            }
         }
     }
-
-    # 适配模板字段名（如果你的模板里是“当前气温”而不是“real_temp”，需要替换key）
-    # 比如：如果模板字段是“当前气温”，就把data里的"real_temp"改成"current_temp"（根据你的模板调整）
-    # 以下是兼容处理，根据截图字段名调整：
-    template_key_map = {
-        "当前气温": "real_temp",
-        "最低气温": "min_temperature",
-        "最高气温": "max_temperature",
-        "当前风向": "wind_direction"
+    for key, value in birthdays.items():
+        # 获取距离下次生日的时间
+        birth_day = get_birthday(value["birthday"], year, today)
+        if birth_day == 0:
+            birthday_data = "今天{}生日哦，祝{}生日快乐！".format(value["name"], value["name"])
+        else:
+            birthday_data = "距离{}的生日还有{}天".format(value["name"], birth_day)
+        # 将生日数据插入data
+        data["data"][key] = {"value": birthday_data, "color": get_color()}
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
     }
-    # 重新构造data（匹配模板字段名）
-    final_data = {}
-    for template_key, code_key in template_key_map.items():
-        final_data[template_key] = data["data"][code_key]
-    # 合并其他字段
-    for key in ["date", "city", "weather", "sunrise", "sunset", "love_day", "birthday1", "birthday2", "note_ch", "note_ch2", "note_ch3", "note_ch4"]:
-        final_data[key] = data["data"][key]
-    data["data"] = final_data
-
-    # 发送消息
-    for i in range(3):
-        try:
-            res = requests.post(send_url, json=data, timeout=30)
-            res.raise_for_status()
-            result = res.json()
-            if result["errcode"] == 0:
-                print(f"✅ 向 {to_user} 推送成功！")
-                return
-            else:
-                print(f"推送失败: {result['errmsg']}")
-        except Exception as e:
-            print(f"推送异常({i+1}/3): {e}")
-            sleep(2)
-    print(f"❌ 向 {to_user} 多次推送失败")
-
+    response = post(url, headers=headers, json=data).json()
+    if response["errcode"] == 40037:
+        print("推送消息失败，请检查模板id是否正确")
+    elif response["errcode"] == 40036:
+        print("推送消息失败，请检查模板id是否为空")
+    elif response["errcode"] == 40003:
+        print("推送消息失败，请检查微信号是否正确")
+    elif response["errcode"] == 0:
+        print("推送消息成功")
+    else:
+        print(response)
+ 
+ 
 if __name__ == "__main__":
-    # 读取配置文件
     try:
-        with open("config.txt", "r", encoding="utf-8") as f:
+        with open("config.txt", encoding="utf-8") as f:
             config = eval(f.read())
-    except Exception as e:
-        sys.exit(f"❌ 读取config.txt失败: {e}")
-
-    # 核心流程
-    try:
-        token = get_access_token()
-        real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset = get_weather(config.get("region", "临沂"))
-        note1, note2, note3, note4 = get_zaoan()
-
-        # 处理多个用户
-        openids = config["user"] if isinstance(config["user"], list) else [config["user"]]
-        for user in openids:
-            send_message(user, token, real_temp, min_temp, max_temp, weather, wind_dir, sunrise, sunset, note1, note2, note3, note4)
-    except Exception as e:
-        print(f"程序执行异常: {e}")
+    except FileNotFoundError:
+        print("推送消息失败，请检查config.txt文件是否与程序位于同一路径")
+        os.system("pause")
         sys.exit(1)
+    except SyntaxError:
+        print("推送消息失败，请检查配置文件格式是否正确")
+        os.system("pause")
+        sys.exit(1)
+ 
+    # 获取accessToken
+    accessToken = get_access_token()
+    # 接收的用户
+    users = config["user"]
+    # 传入地区获取天气信息
+    region = config["region"]
+    weather, temp, wind_dir = get_weather(region)
+    note_ch = config["note_ch"]
+    note_en = config["note_en"]
+    if note_ch == "" and note_en == "":
+        # 获取词霸每日金句
+        note_ch, note_en = get_ciba()
+    # 公众号推送消息
+    for user in users:
+        send_message(user, accessToken, region, weather, temp, wind_dir, note_ch, note_en)
+    os.system("pause")
