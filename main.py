@@ -8,6 +8,7 @@ import os
 
 
 def get_color():
+    # 获取随机颜色
     get_colors = lambda n: list(map(lambda i: "#" + "%06x" % random.randint(0, 0xFFFFFF), range(n)))
     color_list = get_colors(100)
     return random.choice(color_list)
@@ -37,17 +38,19 @@ def get_weather(region):
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json'
     }
-    key = config["weather_key"]
-    location_id = "101120101"  # 临沂固定ID
+    key = config["gaode_key"]  # 直接用你config里的gaode_key
+    city = "临沂"  # 固定为临沂，也可以直接用config["region"]里的城市名
 
-    weather_url = "https://devapi.qweather.com/v7/weather/now"
+    # 高德天气API（免费版无IP限制）
+    weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
-        "location": location_id,
-        "key": key
+        "city": city,
+        "key": key,
+        "extensions": "base",
+        "output": "json"
     }
     try:
-        print(f"请求天气接口：{weather_url}")
-        print(f"参数：location={location_id}, key={key[:8]}******")
+        print(f"请求高德天气接口：{weather_url}")
         resp = get(weather_url, headers=headers, params=params, timeout=15)
         print(f"HTTP状态码：{resp.status_code}")
         print(f"完整返回：{resp.text}")
@@ -59,20 +62,14 @@ def get_weather(region):
             print(f"返回内容：{resp.text}")
         sys.exit(1)
 
-    # 处理API错误返回
-    if response.get("code") != "200":
-        print(f"和风天气API错误：code={response.get('code')}, message={response.get('message')}")
+    if response.get("status") != "1":
+        print(f"高德天气API错误：status={response.get('status')}, info={response.get('info')}")
         sys.exit(1)
 
-    # 处理KeyError
-    if "now" not in response:
-        print("错误：返回JSON中没有'now'字段")
-        print(f"完整返回：{response}")
-        sys.exit(1)
-
-    weather = response["now"]["text"]
-    temp = response["now"]["temp"] + u"\N{DEGREE SIGN}" + "C"
-    wind_dir = response["now"]["windDir"]
+    lives = response["lives"][0]
+    weather = lives["weather"]
+    temp = lives["temperature"] + u"\N{DEGREE SIGN}" + "C"
+    wind_dir = lives["winddirection"] + "风"
     print(f"获取天气成功：{weather}, {temp}, {wind_dir}")
     return weather, temp, wind_dir
 
@@ -224,7 +221,7 @@ if __name__ == "__main__":
     print("=== 开始运行 ===")
     accessToken = get_access_token()
     users = config["user"]
-    region = config["region"]
+    region = "临沂"  # 显示在消息里的地区名
 
     weather, temp, wind_dir = get_weather(region)
     note_ch = config["note_ch"]
