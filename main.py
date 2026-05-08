@@ -30,7 +30,6 @@ def get_access_token():
         print("获取access_token失败，请检查app_id和app_secret是否正确")
         print(f"错误信息：{e}")
         print(f"返回内容：{resp.text if 'resp' in locals() else '无响应'}")
-        os.system("pause")
         sys.exit(1)
     return access_token
 
@@ -53,20 +52,16 @@ def get_weather(region):
         print(f"错误：{e}")
         if 'resp' in locals():
             print(f"返回：{resp.text}")
-        os.system("pause")
         sys.exit(1)
 
     if response["code"] == "404":
         print("推送消息失败，请检查地区名是否有误！")
-        os.system("pause")
         sys.exit(1)
     elif response["code"] == "401":
         print("推送消息失败，请检查和风天气key是否正确！")
-        os.system("pause")
         sys.exit(1)
     elif response["code"] != "200":
         print(f"天气API错误码：{response['code']}")
-        os.system("pause")
         sys.exit(1)
 
     location_id = response["location"][0]["id"]
@@ -82,7 +77,6 @@ def get_weather(region):
         print(f"错误：{e}")
         if 'resp' in locals():
             print(f"返回：{resp.text}")
-        os.system("pause")
         sys.exit(1)
 
     weather = response["now"]["text"]
@@ -102,7 +96,6 @@ def get_birthday(birthday, year, today):
             birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
         except TypeError:
             print("请检查生日的日子是否在今年存在")
-            os.system("pause")
             sys.exit(1)
         birthday_month = birthday.month
         birthday_day = birthday.day
@@ -249,15 +242,12 @@ if __name__ == "__main__":
             config = eval(f.read())
     except FileNotFoundError:
         print("推送消息失败，请检查config.txt文件是否与程序位于同一路径")
-        os.system("pause")
         sys.exit(1)
     except SyntaxError:
         print("推送消息失败，请检查配置文件格式是否正确")
-        os.system("pause")
         sys.exit(1)
     except Exception as e:
         print("配置文件读取失败：", e)
-        os.system("pause")
         sys.exit(1)
 
     # 获取token
@@ -275,5 +265,3 @@ if __name__ == "__main__":
     # 开始推送
     for user in users:
         send_message(user, accessToken, region, weather, temp, wind_dir, note_ch, note_en)
-
-    os.system("pause")
