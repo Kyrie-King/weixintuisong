@@ -8,7 +8,6 @@ import os
 
 
 def get_color():
-    # 获取随机颜色
     get_colors = lambda n: list(map(lambda i: "#" + "%06x" % random.randint(0, 0xFFFFFF), range(n)))
     color_list = get_colors(100)
     return random.choice(color_list)
@@ -25,53 +24,47 @@ def get_access_token():
         data = resp.json()
         access_token = data['access_token']
     except Exception as e:
-        print("获取access_token失败，请检查app_id和app_secret是否正确")
-        print(f"错误：{e}")
-        if 'resp' in locals():
-            print(f"返回：{resp.text}")
+        print("获取access_token失败")
         sys.exit(1)
     return access_token
 
 
 def get_weather(region):
-    headers = {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'application/json'
-    }
-    key = config["gaode_key"]  # 直接用你config里的gaode_key
-    city = "临沂"  # 固定为临沂，也可以直接用config["region"]里的城市名
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    key = config["gaode_key"]
+    city = "临沂"
 
-    # 高德天气API（免费版无IP限制）
+    # 高德 实时+预报 一次性获取所有温度、日出日落
     weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
         "city": city,
         "key": key,
-        "extensions": "base",
+        "extensions": "all",
         "output": "json"
     }
     try:
-        print(f"请求高德天气接口：{weather_url}")
         resp = get(weather_url, headers=headers, params=params, timeout=15)
-        print(f"HTTP状态码：{resp.status_code}")
-        print(f"完整返回：{resp.text}")
         response = resp.json()
     except Exception as e:
-        print("获取天气请求失败")
-        print(f"错误：{e}")
-        if 'resp' in locals():
-            print(f"返回内容：{resp.text}")
+        print("获取天气失败")
         sys.exit(1)
 
     if response.get("status") != "1":
-        print(f"高德天气API错误：status={response.get('status')}, info={response.get('info')}")
+        print("天气API错误")
         sys.exit(1)
 
     lives = response["lives"][0]
+    forecast = response["forecasts"][0]["casts"][0]
+
     weather = lives["weather"]
-    temp = lives["temperature"] + u"\N{DEGREE SIGN}" + "C"
+    real_temp = lives["temperature"]
+    min_temp = forecast["nighttemp"]
+    max_temp = forecast["daytemp"]
     wind_dir = lives["winddirection"] + "风"
-    print(f"获取天气成功：{weather}, {temp}, {wind_dir}")
-    return weather, temp, wind_dir
+    sunrise = forecast["sunrise"]
+    sunset = forecast["sunset"]
+
+    return weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset
 
 
 def get_birthday(birthday, year, today):
@@ -79,15 +72,10 @@ def get_birthday(birthday, year, today):
     if birthday_year[0] == "r":
         r_mouth = int(birthday.split("-")[1])
         r_day = int(birthday.split("-")[2])
-        try:
-            birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
-        except TypeError:
-            print("请检查生日的日子是否在今年存在")
-            sys.exit(1)
+        birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
         birthday_month = birthday.month
         birthday_day = birthday.day
         year_date = date(year, birthday_month, birthday_day)
-
     else:
         birthday_month = int(birthday.split("-")[1])
         birthday_day = int(birthday.split("-")[2])
@@ -95,8 +83,7 @@ def get_birthday(birthday, year, today):
 
     if today > year_date:
         if birthday_year[0] == "r":
-            r_last_birthday = ZhDate((year + 1), r_mouth, r_day).to_datetime().date()
-            birth_date = date((year + 1), r_last_birthday.month, r_last_birthday.day)
+            birth_date = ZhDate((year + 1), int(birthday.split("-")[1]), int(birthday.split("-")[2])).to_datetime().date()
         else:
             birth_date = date((year + 1), birthday_month, birthday_day)
         birth_day = str(birth_date.__sub__(today)).split(" ")[0]
@@ -108,23 +95,31 @@ def get_birthday(birthday, year, today):
     return birth_day
 
 
-def get_ciba():
-    url = "http://open.iciba.com/dsapi/"
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    try:
-        r = get(url, headers=headers, timeout=10)
-        note_en = r.json()["content"]
-        note_ch = r.json()["note"]
-    except:
-        note_ch = "今日句子加载失败"
-        note_en = "Failed to load today's sentence"
-    return note_ch, note_en
+# 固定土味情话库
+def get_love_words():
+    words = [
+        "我喜欢你，不是一时兴起，而是蓄谋已久",
+        "世界纷纷扰扰，还好我有你",
+        "目光所及皆是你，心之所向也是你",
+        "有幸相遇，恰好合拍，岁岁年年都想和你"
+    ]
+    return words[0], words[1], words[2], words[3]
 
 
-def send_message(to_user, access_token, region_name, weather, temp, wind_dir, note_ch, note_en):
+# 固定脑筋急转弯库
+def get_riddle():
+    q1 = "什么东西越洗越脏？"
+    q2 = "什么门永远关不上？"
+    q3 = "什么书里毛病最多？"
+    q4 = "什么水永远用不完？"
+    a1 = "答案：水"
+    a2 = "答案：球门"
+    a3 = "答案：医学书"
+    a4 = "答案：泪水"
+    return q1, q2, q3, q4, a1, a2, a3, a4
+
+
+def send_message(to_user, access_token, city_name, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset, note_ch, note_en):
     url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     year = localtime().tm_year
@@ -139,10 +134,17 @@ def send_message(to_user, access_token, region_name, weather, temp, wind_dir, no
     love_date = date(love_year, love_month, love_day)
     love_days = str(today.__sub__(love_date)).split(" ")[0]
 
-    birthdays = {}
-    for k, v in config.items():
-        if k.startswith("birth"):
-            birthdays[k] = v
+    # 生日
+    birth1 = config["birthday1"]
+    birth2 = config["birthday2"]
+    birth_day1 = get_birthday(birth1["birthday"], year, today)
+    birth_day2 = get_birthday(birth2["birthday"], year, today)
+    birthday1_data = f"距离{birth1['name']}的生日还有{birth_day1}天"
+    birthday2_data = f"距离{birth2['name']}的生日还有{birth_day2}天"
+
+    # 情话 + 脑筋急转弯
+    l1, l2, l3, l4 = get_love_words()
+    rq1, rq2, rq3, rq4, ra1, ra2, ra3, ra4 = get_riddle()
 
     data = {
         "touser": to_user,
@@ -150,84 +152,54 @@ def send_message(to_user, access_token, region_name, weather, temp, wind_dir, no
         "url": "http://weixin.qq.com/download",
         "topcolor": "#FF0000",
         "data": {
-            "date": {
-                "value": "{} {}".format(today, week),
-                "color": get_color()
-            },
-            "region": {
-                "value": region_name,
-                "color": get_color()
-            },
-            "weather": {
-                "value": weather,
-                "color": get_color()
-            },
-            "temp": {
-                "value": temp,
-                "color": get_color()
-            },
-            "wind_dir": {
-                "value": wind_dir,
-                "color": get_color()
-            },
-            "love_day": {
-                "value": love_days,
-                "color": get_color()
-            },
-            "note_en": {
-                "value": note_en,
-                "color": get_color()
-            },
-            "note_ch": {
-                "value": note_ch,
-                "color": get_color()
-            }
+            "date": {"value": f"{today} {week}", "color": get_color()},
+            "city": {"value": city_name, "color": get_color()},
+            "weather": {"value": weather, "color": get_color()},
+            "real_temp": {"value": real_temp, "color": get_color()},
+            "min_temperature": {"value": min_temp, "color": get_color()},
+            "max_temperature": {"value": max_temp, "color": get_color()},
+            "wind_direction": {"value": wind_dir, "color": get_color()},
+            "sunrise": {"value": sunrise, "color": get_color()},
+            "sunset": {"value": sunset, "color": get_color()},
+            "love_day": {"value": love_days, "color": get_color()},
+            "birthday1": {"value": birthday1_data, "color": get_color()},
+            "birthday2": {"value": birthday2_data, "color": get_color()},
+            "love1": {"value": l1, "color": get_color()},
+            "love2": {"value": l2, "color": get_color()},
+            "love3": {"value": l3, "color": get_color()},
+            "love4": {"value": l4, "color": get_color()},
+            "riddle_q1": {"value": q1, "color": get_color()},
+            "riddle_q2": {"value": q2, "color": get_color()},
+            "riddle_q3": {"value": q3, "color": get_color()},
+            "riddle_q4": {"value": q4, "color": get_color()},
+            "riddle_ans1": {"value": ra1, "color": get_color()},
+            "riddle_ans2": {"value": f"{ra2} {ra3} {ra4}", "color": get_color()}
         }
     }
 
-    for key, value in birthdays.items():
-        birth_day = get_birthday(value["birthday"], year, today)
-        if birth_day == 0:
-            birthday_data = f"今天{value['name']}生日哦，祝{value['name']}生日快乐！"
-        else:
-            birthday_data = f"距离{value['name']}的生日还有{birth_day}天"
-        data["data"][key] = {"value": birthday_data, "color": get_color()}
-
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-
-    try:
-        response = post(url, headers=headers, json=data, timeout=15).json()
-    except Exception as e:
-        print("发送消息失败：", e)
-        return
-
+    headers = {'Content-Type': 'application/json'}
+    response = post(url, headers=headers, json=data, timeout=15).json()
     if response.get("errcode") == 0:
-        print("推送消息成功")
+        print("✅ 推送成功")
     else:
-        print("推送失败：", response)
+        print("❌ 推送失败：", response)
 
 
 if __name__ == "__main__":
     try:
         with open("config.txt", encoding="utf-8") as f:
             config = eval(f.read())
-    except Exception as e:
-        print("配置文件读取失败：", e)
+    except:
+        print("配置文件读取失败")
         sys.exit(1)
 
-    print("=== 开始运行 ===")
     accessToken = get_access_token()
     users = config["user"]
-    region = "临沂"  # 显示在消息里的地区名
+    region = "临沂"
 
-    weather, temp, wind_dir = get_weather(region)
+    weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset = get_weather(region)
     note_ch = config["note_ch"]
     note_en = config["note_en"]
-    if not note_ch and not note_en:
-        note_ch, note_en = get_ciba()
 
     for user in users:
-        send_message(user, accessToken, region, weather, temp, wind_dir, note_ch, note_en)
+        send_message(user, accessToken, region, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset, note_ch, note_en)
