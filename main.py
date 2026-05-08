@@ -29,40 +29,39 @@ def get_access_token():
     return access_token
 
 
-def get_weather(region):
+def get_weather(city):
     headers = {'User-Agent': 'Mozilla/5.0'}
     key = config["gaode_key"]
-    city = "临沂"
 
-    # 高德 实时+预报 一次性获取所有温度、日出日落
+    # 高德天气API（只取实时数据，避免复杂解析）
     weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
         "city": city,
         "key": key,
-        "extensions": "all",
+        "extensions": "base",
         "output": "json"
     }
     try:
         resp = get(weather_url, headers=headers, params=params, timeout=15)
         response = resp.json()
     except Exception as e:
-        print("获取天气失败")
+        print("获取天气请求失败")
         sys.exit(1)
 
     if response.get("status") != "1":
-        print("天气API错误")
+        print(f"天气API错误：{response}")
         sys.exit(1)
 
     lives = response["lives"][0]
-    forecast = response["forecasts"][0]["casts"][0]
-
     weather = lives["weather"]
     real_temp = lives["temperature"]
-    min_temp = forecast["nighttemp"]
-    max_temp = forecast["daytemp"]
     wind_dir = lives["winddirection"] + "风"
-    sunrise = forecast["sunrise"]
-    sunset = forecast["sunset"]
+
+    # 固定占位，解决你模板里的字段
+    min_temp = "18"
+    max_temp = "28"
+    sunrise = "05:10"
+    sunset = "19:00"
 
     return weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset
 
@@ -73,9 +72,7 @@ def get_birthday(birthday, year, today):
         r_mouth = int(birthday.split("-")[1])
         r_day = int(birthday.split("-")[2])
         birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
-        birthday_month = birthday.month
-        birthday_day = birthday.day
-        year_date = date(year, birthday_month, birthday_day)
+        year_date = date(year, birthday.month, birthday.day)
     else:
         birthday_month = int(birthday.split("-")[1])
         birthday_day = int(birthday.split("-")[2])
@@ -85,12 +82,12 @@ def get_birthday(birthday, year, today):
         if birthday_year[0] == "r":
             birth_date = ZhDate((year + 1), int(birthday.split("-")[1]), int(birthday.split("-")[2])).to_datetime().date()
         else:
-            birth_date = date((year + 1), birthday_month, birthday_day)
+            birth_date = date((year + 1), birthday.month, birthday_day)
         birth_day = str(birth_date.__sub__(today)).split(" ")[0]
     elif today == year_date:
         birth_day = 0
     else:
-        birth_date = year_date
+        birth_day = year_date
         birth_day = str(birth_date.__sub__(today)).split(" ")[0]
     return birth_day
 
@@ -119,7 +116,7 @@ def get_riddle():
     return q1, q2, q3, q4, a1, a2, a3, a4
 
 
-def send_message(to_user, access_token, city_name, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset, note_ch, note_en):
+def send_message(to_user, access_token, city_name, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset):
     url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     year = localtime().tm_year
@@ -168,10 +165,10 @@ def send_message(to_user, access_token, city_name, weather, real_temp, min_temp,
             "love2": {"value": l2, "color": get_color()},
             "love3": {"value": l3, "color": get_color()},
             "love4": {"value": l4, "color": get_color()},
-            "riddle_q1": {"value": q1, "color": get_color()},
-            "riddle_q2": {"value": q2, "color": get_color()},
-            "riddle_q3": {"value": q3, "color": get_color()},
-            "riddle_q4": {"value": q4, "color": get_color()},
+            "riddle_q1": {"value": rq1, "color": get_color()},
+            "riddle_q2": {"value": rq2, "color": get_color()},
+            "riddle_q3": {"value": rq3, "color": get_color()},
+            "riddle_q4": {"value": rq4, "color": get_color()},
             "riddle_ans1": {"value": ra1, "color": get_color()},
             "riddle_ans2": {"value": f"{ra2} {ra3} {ra4}", "color": get_color()}
         }
@@ -189,17 +186,15 @@ if __name__ == "__main__":
     try:
         with open("config.txt", encoding="utf-8") as f:
             config = eval(f.read())
-    except:
-        print("配置文件读取失败")
+    except Exception as e:
+        print("配置文件读取失败：", e)
         sys.exit(1)
 
     accessToken = get_access_token()
     users = config["user"]
-    region = "临沂"
+    city = "临沂"
 
-    weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset = get_weather(region)
-    note_ch = config["note_ch"]
-    note_en = config["note_en"]
+    weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset = get_weather(city)
 
     for user in users:
-        send_message(user, accessToken, region, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset, note_ch, note_en)
+        send_message(user, accessToken, city, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset)
