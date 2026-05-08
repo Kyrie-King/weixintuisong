@@ -25,6 +25,9 @@ def get_access_token():
         access_token = data['access_token']
     except Exception as e:
         print("获取access_token失败，请检查app_id和app_secret是否正确")
+        print(f"错误：{e}")
+        if 'resp' in locals():
+            print(f"返回：{resp.text}")
         sys.exit(1)
     return access_token
 
@@ -35,7 +38,7 @@ def get_weather(region):
         'Accept': 'application/json'
     }
     key = config["weather_key"]
-    location_id = "101120101"
+    location_id = "101120101"  # 临沂固定ID
 
     weather_url = "https://devapi.qweather.com/v7/weather/now"
     params = {
@@ -43,15 +46,34 @@ def get_weather(region):
         "key": key
     }
     try:
+        print(f"请求天气接口：{weather_url}")
+        print(f"参数：location={location_id}, key={key[:8]}******")
         resp = get(weather_url, headers=headers, params=params, timeout=15)
+        print(f"HTTP状态码：{resp.status_code}")
+        print(f"完整返回：{resp.text}")
         response = resp.json()
-    except:
-        print("获取天气失败")
+    except Exception as e:
+        print("获取天气请求失败")
+        print(f"错误：{e}")
+        if 'resp' in locals():
+            print(f"返回内容：{resp.text}")
+        sys.exit(1)
+
+    # 处理API错误返回
+    if response.get("code") != "200":
+        print(f"和风天气API错误：code={response.get('code')}, message={response.get('message')}")
+        sys.exit(1)
+
+    # 处理KeyError
+    if "now" not in response:
+        print("错误：返回JSON中没有'now'字段")
+        print(f"完整返回：{response}")
         sys.exit(1)
 
     weather = response["now"]["text"]
     temp = response["now"]["temp"] + u"\N{DEGREE SIGN}" + "C"
     wind_dir = response["now"]["windDir"]
+    print(f"获取天气成功：{weather}, {temp}, {wind_dir}")
     return weather, temp, wind_dir
 
 
@@ -181,10 +203,11 @@ def send_message(to_user, access_token, region_name, weather, temp, wind_dir, no
 
     try:
         response = post(url, headers=headers, json=data, timeout=15).json()
-    except:
+    except Exception as e:
+        print("发送消息失败：", e)
         return
 
-    if response["errcode"] == 0:
+    if response.get("errcode") == 0:
         print("推送消息成功")
     else:
         print("推送失败：", response)
@@ -194,10 +217,11 @@ if __name__ == "__main__":
     try:
         with open("config.txt", encoding="utf-8") as f:
             config = eval(f.read())
-    except:
-        print("配置文件错误")
+    except Exception as e:
+        print("配置文件读取失败：", e)
         sys.exit(1)
 
+    print("=== 开始运行 ===")
     accessToken = get_access_token()
     users = config["user"]
     region = config["region"]
