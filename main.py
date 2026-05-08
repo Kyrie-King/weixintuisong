@@ -37,43 +37,9 @@ def get_weather(region):
                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
     }
     key = config["weather_key"]
-
-    # 备用API地址，解决部分环境下geoapi访问失败的问题
-    region_url_list = [
-        "https://geoapi.qweather.com/v2/city/lookup?location={}&key={}".format(region, key),
-        "https://api.qweather.com/v2/city/lookup?location={}&key={}".format(region, key)
-    ]
-
-    response = None
-    for url in region_url_list:
-        try:
-            print(f"尝试请求：{url}")
-            resp = get(url, headers=headers, timeout=15)
-            print(f"HTTP状态码：{resp.status_code}")
-            print(f"返回内容：{resp.text}")
-            resp.raise_for_status()
-            response = resp.json()
-            break
-        except Exception as e:
-            print(f"请求失败，错误：{e}，尝试下一个地址...")
-            continue
-
-    if response is None:
-        print("所有城市查询接口均请求失败")
-        sys.exit(1)
-
-    if response.get("code") == "404":
-        print("推送消息失败，请检查地区名是否有误！")
-        sys.exit(1)
-    elif response.get("code") == "401":
-        print("推送消息失败，请检查和风天气key是否正确！")
-        sys.exit(1)
-    elif response.get("code") != "200":
-        print(f"天气API错误码：{response.get('code')}")
-        sys.exit(1)
-
-    location_id = response["location"][0]["id"]
-    print(f"获取到城市ID：{location_id}")
+    # 直接使用临沂的Location ID，跳过城市查询接口
+    location_id = "101120101"
+    print(f"使用固定Location ID: {location_id}")
 
     # 获取实时天气
     weather_url = "https://devapi.qweather.com/v7/weather/now?location={}&key={}".format(location_id, key)
