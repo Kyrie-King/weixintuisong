@@ -33,7 +33,6 @@ def get_weather(city):
     headers = {'User-Agent': 'Mozilla/5.0'}
     key = config["gaode_key"]
 
-    # 高德天气API（只取实时数据，避免复杂解析）
     weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
         "city": city,
@@ -57,7 +56,7 @@ def get_weather(city):
     real_temp = lives["temperature"]
     wind_dir = lives["winddirection"] + "风"
 
-    # 固定占位，解决你模板里的字段
+    # 占位字段，确保模板不空
     min_temp = "18"
     max_temp = "28"
     sunrise = "05:10"
@@ -66,30 +65,29 @@ def get_weather(city):
     return weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset
 
 
-def get_birthday(birthday, year, today):
-    birthday_year = birthday.split("-")[0]
-    if birthday_year[0] == "r":
-        r_mouth = int(birthday.split("-")[1])
-        r_day = int(birthday.split("-")[2])
-        birthday = ZhDate(year, r_mouth, r_day).to_datetime().date()
-        year_date = date(year, birthday.month, birthday.day)
+def get_birthday(birthday_str, today):
+    """
+    修复后的生日计算函数，直接接收字符串，不再传入year
+    """
+    if birthday_str.startswith("r-"):
+        # 农历生日
+        parts = birthday_str.split("-")
+        month = int(parts[1])
+        day = int(parts[2])
+        birth_date = ZhDate(today.year, month, day).to_datetime().date()
+        if birth_date < today:
+            birth_date = ZhDate(today.year + 1, month, day).to_datetime().date()
     else:
-        birthday_month = int(birthday.split("-")[1])
-        birthday_day = int(birthday.split("-")[2])
-        year_date = date(year, birthday_month, birthday_day)
+        # 公历生日
+        birth_parts = birthday_str.split("-")
+        month = int(birth_parts[1])
+        day = int(birth_parts[2])
+        birth_date = date(today.year, month, day)
+        if birth_date < today:
+            birth_date = date(today.year + 1, month, day)
 
-    if today > year_date:
-        if birthday_year[0] == "r":
-            birth_date = ZhDate((year + 1), int(birthday.split("-")[1]), int(birthday.split("-")[2])).to_datetime().date()
-        else:
-            birth_date = date((year + 1), birthday.month, birthday_day)
-        birth_day = str(birth_date.__sub__(today)).split(" ")[0]
-    elif today == year_date:
-        birth_day = 0
-    else:
-        birth_day = year_date
-        birth_day = str(birth_date.__sub__(today)).split(" ")[0]
-    return birth_day
+    days_left = (birth_date - today).days
+    return days_left
 
 
 # 固定土味情话库
@@ -119,23 +117,20 @@ def get_riddle():
 def send_message(to_user, access_token, city_name, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset):
     url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
-    year = localtime().tm_year
-    month = localtime().tm_mon
-    day = localtime().tm_mday
-    today = datetime.date(datetime(year=year, month=month, day=day))
+    today = date.today()
     week = week_list[today.isoweekday() % 7]
 
     love_year = int(config["love_date"].split("-")[0])
     love_month = int(config["love_date"].split("-")[1])
     love_day = int(config["love_date"].split("-")[2])
     love_date = date(love_year, love_month, love_day)
-    love_days = str(today.__sub__(love_date)).split(" ")[0]
+    love_days = (today - love_date).days
 
     # 生日
     birth1 = config["birthday1"]
     birth2 = config["birthday2"]
-    birth_day1 = get_birthday(birth1["birthday"], year, today)
-    birth_day2 = get_birthday(birth2["birthday"], year, today)
+    birth_day1 = get_birthday(birth1["birthday"], today)
+    birth_day2 = get_birthday(birth2["birthday"], today)
     birthday1_data = f"距离{birth1['name']}的生日还有{birth_day1}天"
     birthday2_data = f"距离{birth2['name']}的生日还有{birth_day2}天"
 
