@@ -109,8 +109,8 @@ def get_sentence():
 
 
 def get_access_token():
-    appid = os.getenv("WX_APPID")
-    secret = os.getenv("WX_APP_SECRET")
+    appid = os.getenv("app_id")
+    secret = os.getenv("app_secret")
     url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appid}&secret={secret}'
     res = requests.get(url,timeout=15).json()
     print("微信token返回：",res) #打印返回信息查看错误
