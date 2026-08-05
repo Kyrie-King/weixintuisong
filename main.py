@@ -109,12 +109,15 @@ def get_sentence():
 
 
 def get_access_token():
-    """获取微信公众号access_token，填入自己的参数"""
     appid = os.getenv("WX_APPID")
     secret = os.getenv("WX_APP_SECRET")
     url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appid}&secret={secret}'
     res = requests.get(url,timeout=15).json()
-    return res['access_token']
+    print("微信token返回：",res) #打印返回信息查看错误
+    if "access_token" in res:
+        return res['access_token']
+    else:
+        raise Exception(f"获取token失败:{res}")
 
 
 def send_one_user(openid, weather_info, access_token):
