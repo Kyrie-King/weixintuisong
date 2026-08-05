@@ -3,6 +3,8 @@ from requests import get, post
 from datetime import datetime, date, timedelta
 from zhdate import ZhDate
 import sys
+import os
+import json
 
 
 def get_color():
@@ -363,14 +365,53 @@ def send_message(to_user, access_token, city_name, weather, real_temp,
         print(f"❌ 推送异常：{e}")
 
 
-if __name__ == "__main__":
-    # 读取配置
-    try:
-        with open("config.txt", encoding="utf-8") as f:
-            config = eval(f.read())
-    except Exception as e:
-        print(f"配置文件读取失败：{e}")
+def load_config():
+    """从环境变量加载配置，不再依赖 config.txt"""
+    required = ["APP_ID", "APP_SECRET", "TEMPLATE_ID", "GAODE_KEY",
+                "USER", "LOVE_DATE", "BIRTHDAY1_NAME", "BIRTHDAY1_DATE",
+                "BIRTHDAY2_NAME", "BIRTHDAY2_DATE"]
+    missing = [k for k in required if not os.environ.get(k)]
+    if missing:
+        print(f"❌ 缺少环境变量：{', '.join(missing)}")
         sys.exit(1)
+
+    # user 字段是 JSON 数组
+    try:
+        user_list = json.loads(os.environ["USER"])
+    except Exception:
+        print("❌ USER 环境变量格式错误，应为 JSON 数组，如 [\"openid1\", \"openid2\"]")
+        sys.exit(1)
+
+    return {
+        "app_id": os.environ["APP_ID"],
+        "app_secret": os.environ["APP_SECRET"],
+        "template_id": os.environ["TEMPLATE_ID"],
+        "gaode_key": os.environ["GAODE_KEY"],
+        "user": user_list,
+        "love_date": os.environ["LOVE_DATE"],
+        "birthday1": {
+            "name": os.environ["BIRTHDAY1_NAME"],
+            "birthday": os.environ["BIRTHDAY1_DATE"]
+        },
+        "birthday2": {
+            "name": os.environ["BIRTHDAY2_NAME"],
+            "birthday": os.environ["BIRTHDAY2_DATE"]
+        }
+    }
+
+
+if __name__ == "__main__":
+    # 优先从环境变量读取（GitHub Actions 模式）
+    if os.environ.get("APP_ID"):
+        config = load_config()
+    else:
+        # 本地运行 fallback：读取 config.txt
+        try:
+            with open("config.txt", encoding="utf-8") as f:
+                config = eval(f.read())
+        except Exception as e:
+            print(f"配置文件读取失败：{e}")
+            sys.exit(1)
 
     accessToken = get_access_token()
     users = config["user"]
