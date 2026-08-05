@@ -37,7 +37,7 @@ HE_DONG_LAT = "35.08"
 
 # --------------------------获取access_token 原版代码原样保留--------------------------
 def get_access_token():
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={APPSECRET}"
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
     res = requests.get(url).json()
     return res["access_token"]
 
