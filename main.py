@@ -1,6 +1,7 @@
 import json
 import requests
-from datetime import date
+from datetime import date, datetime, timedelta
+import ephem
 import time
 import warnings
 warnings.filterwarnings("ignore")
@@ -37,11 +38,11 @@ def get_access_token():
     else:
         raise Exception(f"获取token失败:{res}")
 
-# 获取高德天气（直接读取接口自带日出日落，不再使用ephem）
+# 获取高德天气
 def get_weather():
     # base 获取实时实况 lives
     url_live = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=base"
-    # all 获取多日预报、原生日出日落
+    # all 获取多日预报
     url_forecast = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
 
     # 请求实况天气，最多重试3次
@@ -76,6 +77,16 @@ def get_weather():
     live_info = resp_live["lives"][0]
     forecast_today = resp_forecast["forecasts"][0]["casts"][0]
 
+    # 临沂经纬度，计算日出日落 +8小时转为北京时间
+    observer = ephem.Observer()
+    observer.lat = '35.06'
+    observer.lon = '118.33'
+    sun = ephem.Sun()
+    rise_utc = observer.next_rising(sun).datetime()
+    set_utc = observer.next_setting(sun).datetime()
+    sunrise = (rise_utc + timedelta(hours=8)).strftime("%H:%M")
+    sunset = (set_utc + timedelta(hours=8)).strftime("%H:%M")
+
     weather_data = {
         "city": REGION,
         "weather": forecast_today["dayweather"],
@@ -83,8 +94,8 @@ def get_weather():
         "min_temperature": forecast_today["nighttemp"],
         "max_temperature": forecast_today["daytemp"],
         "wind_direction": f"{forecast_today['daywind']}风 {forecast_today['daypower']}级",
-        "sunrise": forecast_today["sunrise"],
-        "sunset": forecast_today["sunset"]
+        "sunrise": sunrise,
+        "sunset": sunset
     }
     # 容错，防止实时气温高于当日最高预报温度
     if float(weather_data["real_temp"])>float(weather_data["max_temperature"]):
