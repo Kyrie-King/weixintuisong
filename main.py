@@ -1,86 +1,93 @@
 import json
-import os
 import requests
+from datetime import datetime
 import ephem
-from datetime import datetime, date
-from zhdate import ZhDate
 
-# ===================== 配置区，请自行修改参数 =====================
-config = {
-    "love_date": "2024-01-01",        # 相恋起始日期
-    "template_id": "你的微信模板ID",
-    "user": ["接收人openid"],
-    "birthday1": {
-        "name": "娇娇",
-        "birthday": "r-12-5"            # r‑代表农历 月‑日
-    },
-    "birthday2": {
-        "name": "自己",
-        "birthday": "r-10-24"
-    },
-    "note_ch": "",
-    "note_en": ""
-}
+# ========== 加载配置文件 强制调试打印 ==========
+try:
+    with open("config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+except Exception as e:
+    print("读取config.json失败！", e)
+    exit()
 
-GAODE_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
+WX_APPID = config["app_id"]
+WX_SECRET = config["app_secret"]
+TEMPLATE_ID = config["template_id"]
+USER_OPENID_LIST = config["user"]
+GAODE_KEY = config["gaode_key"]
+ADCODE = config["adcode"]
+REGION = config["region"]
 
+# 关键调试：打印读取到的公众号AppID
+print(f"【调试信息】已读取到 app_id = {WX_APPID}")
+
+
+# ========== 获取微信access_token ==========
+def get_access_token():
+    url = (f"https://api.weixin.qq.com/cgi-bin/token"
+           f"?grant_type=client_credential&appid={WX_APPID}&secret={WX_SECRET}")
+    res = requests.get(url, timeout=15).json()
+    print("微信token返回：", res)
+    if "access_token" in res:
+        return res["access_token"]
+    else:
+        raise Exception(f"获取token失败:{res}")
+
+
+# ========== 获取高德天气 ==========
 def get_weather():
-    """获取临沂天气，返回结构化字典，适配微信模板读取"""
-    params = {
-        "key": os.getenv("GAODE_KEY"),
-        "city": "371300",
-        "extensions": "all"
+    url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}"
+    resp = requests.get(url, timeout=15).json()
+    print("高德返回数据：", resp)
+    today_info = resp["forecasts"][0]["casts"][0]
+    weather_data = {
+        "region": REGION,
+        "weather": today_info["dayweather"],
+        "temp_low": today_info["nighttemp"],
+        "temp_high": today_info["daytemp"],
+        "wind_dir": f'{today_info["daywind"]}风 {today_info["daypower"]}级'
     }
-    resp = requests.get(GAODE_WEATHER_URL, params=params, timeout=15)
-    res = resp.json()
-    print("高德返回数据：", res)
+    # 临沂经纬度计算日出日落
+    observer = ephem.Observer()
+    observer.lat, observer.lon = '35.06', '118.33'
+    sun = ephem.Sun()
+    sunrise = observer.next_rising(sun).datetime().strftime("%H:%M")
+    sunset = observer.next_setting(sun).datetime().strftime("%H:%M")
+    weather_data["sunrise"] = sunrise
+    weather_data["sunset"] = sunset
+    return weather_data
 
-    weather_dict = {
-        "region": "临沂市",
-        "weather": "未知",
-        "temp_low": "",
-        "temp_high": "",
-        "now_temp": "",
-        "wind_dir": ""
+
+# ========== 发送微信模板消息 ==========
+def send_wx_template(access_token, openid, weather):
+    api_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
+    post_data = {
+        "touser": openid,
+        "template_id": TEMPLATE_ID,
+        "data": {
+            "region": {"value": weather["region"]},
+            "weather": {"value": weather["weather"]},
+            "temp": {"value": f'{weather["temp_low"]}~{weather["temp_high"]}℃'},
+            "wind": {"value": weather["wind_dir"]},
+            "rise": {"value": weather["sunrise"]},
+            "set": {"value": weather["sunset"]}
+        }
     }
-
-    if "lives" in res and len(res["lives"]) > 0:
-        live_data = res["lives"][0]
-        weather_dict["weather"] = live_data['weather']
-        weather_dict["now_temp"] = live_data['temperature']
-        weather_dict["wind_dir"] = f"{live_data['winddirection']} 风级{live_data['windpower']}"
-
-    today_forecast = res["forecasts"][0]["casts"][0]
-    weather_dict["weather"] = today_forecast['dayweather']
-    weather_dict["temp_low"] = today_forecast['nighttemp']
-    weather_dict["temp_high"] = today_forecast['daytemp']
-    weather_dict["wind_dir"] = f"{today_forecast['daywind']} 风级{today_forecast['daypower']}"
-
-    # ephem库计算临沂日出日落
-    linyi = ephem.Observer()
-    linyi.lat = '35.06'
-    linyi.lon = '118.33'
-    today_ephem = datetime.now().date()
-    sunrise = linyi.next_rising(ephem.Sun(today_ephem)).datetime().strftime("%H:%M")
-    sunset = linyi.next_setting(ephem.Sun(today_ephem)).datetime().strftime("%H:%M")
-    weather_dict["sunrise"] = sunrise
-    weather_dict["sunset"] = sunset
-
-    return weather_dict
+    result = requests.post(api_url, json=post_data).json()
+    print(f"推送用户{openid}返回结果：{result}")
 
 
-def send_wechat_message(content):
-    """server酱简易推送（你原先顶部入口）"""
-    token = os.getenv("WECHAT_TOKEN")
-    user_id = os.getenv("WECHAT_UID")
-    url = f"https://sctapi.ftqq.com/{token}.send"
-    data = {
-        "title": "每日天气提醒",
-        "desp": content,
-        "openid": user_id
-    }
-    requests.post(url, data=data, timeout=15)
-
+# ========== 主入口 ==========
+if __name__ == "__main__":
+    try:
+        token = get_access_token()
+        weather_info = get_weather()
+        for openid in USER_OPENID_LIST:
+            send_wx_template(token, openid, weather_info)
+        print("✅ 微信模板消息推送完毕")
+    except Exception as err:
+        print(f"❌程序异常：{err}")
 
 def get_love_day_count():
     start = datetime.strptime(config["love_date"], "%Y-%m-%d").date()
