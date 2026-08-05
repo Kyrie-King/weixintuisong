@@ -3,6 +3,9 @@ import requests
 from datetime import datetime, date
 import ephem
 import time
+import warnings
+# 屏蔽https不安全警告
+warnings.filterwarnings("ignore")
 
 # ========== 加载配置文件 config.json ==========
 try:
@@ -38,7 +41,7 @@ def get_access_token():
     else:
         raise Exception(f"获取token失败:{res}")
 
-# ========== 获取高德天气，加入重试、超时、异常兜底 ==========
+# ========== 获取高德天气，增加完整判断 ==========
 def get_weather():
     url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
     retry_times = 3
@@ -46,15 +49,15 @@ def get_weather():
     for i in range(retry_times):
         try:
             resp = requests.get(url, timeout=30, verify=False).json()
+            print("高德返回原始数据：",resp)
             if resp.get("status") == "1":
                 break
         except Exception as e:
             print(f"第{i+1}次请求高德超时，正在重试,错误:{e}")
             time.sleep(2)
 
-    # 请求失败兜底默认天气，防止程序直接崩溃终止推送
-    if resp is None or resp.get("status") != "1":
-        print("高德天气接口全部重试失败，启用兜底天气数据")
+    if resp is None or resp.get("status") != "1" or "lives" not in resp or "forecasts" not in resp:
+        print("高德天气接口异常，启用兜底天气数据")
         weather_data = {
             "city": REGION,
             "weather":"多云",
@@ -67,10 +70,9 @@ def get_weather():
         }
         return weather_data
 
-    live_info = resp["lives"][0]          # 实时天气
-    forecast_today = resp["forecasts"][0]["casts"][0] # 今日预报
+    live_info = resp["lives"][0]
+    forecast_today = resp["forecasts"][0]["casts"][0]
 
-    # 临沂经纬度计算日出日落
     observer = ephem.Observer()
     observer.lat, observer.lon = '35.06', '118.33'
     sun = ephem.Sun()
@@ -92,10 +94,8 @@ def get_weather():
 # ========== 计算相恋天数、生日剩余天数 ==========
 def calc_day_num():
     today = date.today()
-    # 在一起天数
     love_day = (today - love_start_date).days
 
-    # 获取下一次生日倒计时
     def get_next_birthday(birth):
         try:
             next_b = date(today.year, birth.month, birth.day)
@@ -114,7 +114,7 @@ def calc_day_num():
     return now_date_str, love_day, birthday1, birthday2
 
 
-# ========== 发送微信模板消息（键严格匹配你的模板） ==========
+# ========== 发送微信模板消息 ==========
 def send_wx_template(access_token, openid, weather, date_str, love_day, b1, b2):
     api_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     post_data = {
