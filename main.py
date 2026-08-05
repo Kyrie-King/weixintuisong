@@ -1,143 +1,195 @@
-import requests
-import json
+import random
+from time import localtime
+from requests import get, post
+from datetime import datetime, date
+from zhdate import ZhDate
 import sys
-from datetime import datetime
+import os
 
-conf = {
-    "app_id": "wxe56a269a1ad4ca32",
-    "app_secret": "1ecaa3c14689d2a9d232b3dec9c82026",
-    "template_id": "CIDOS0Xso8pGa3tvHN1vnsF8dIRQOitbPlAeVuqXXaE",
-    "user": ["oWI8T3D6BIR55LSHqDmUu3i91tDU","oWI8T3KwC0WLy_NTI_HEtD5Z43Go"],
-    "weather_key": "2c4595bee21046ec8de24159b74b4d8d",
-    "birthday1": {"name": "娇娇", "birthday": "03-07"},
-    "birthday2": {"name": "张喆", "birthday": "10-24"},
-    "love_date": "2024-06-29",
-}
 
-QWEATHER_API_KEY = conf["weather_key"]
-LON, LAT = "118.40", "35.08"
+def get_color():
+    get_colors = lambda n: list(map(lambda i: "#" + "%06x" % random.randint(0, 0xFFFFFF), range(n)))
+    color_list = get_colors(100)
+    return random.choice(color_list)
+
 
 def get_access_token():
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={conf['app_id']}&secret={conf['app_secret']}"
-    res = requests.get(url,timeout=15).json()
-    if "access_token" not in res:
-        print("❌ Token获取失败，终止推送", res)
+    app_id = config["app_id"]
+    app_secret = config["app_secret"]
+    post_url = ("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}"
+                .format(app_id, app_secret))
+    try:
+        resp = get(post_url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        access_token = data['access_token']
+    except Exception as e:
+        print("获取access_token失败")
         sys.exit(1)
-    return res["access_token"]
+    return access_token
 
-import requests
-import sys
 
-def get_weather():
-    # 在这里放入你全部的 api‑key
-    key_list = [
-        "2c4595bee21046ec8de24159b74b4d8d",
-        "4115864138f647969ab28d83a463829a",
-        "d9fd4a0ab55d4b14a45ea7ec31ecc5a8"
+def get_weather(city):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    key = config["gaode_key"]
+
+    weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
+    params = {
+        "city": city,
+        "key": key,
+        "extensions": "base",
+        "output": "json"
+    }
+    try:
+        resp = get(weather_url, headers=headers, params=params, timeout=15)
+        response = resp.json()
+    except Exception as e:
+        print("获取天气请求失败")
+        sys.exit(1)
+
+    if response.get("status") != "1":
+        print(f"天气API错误：{response}")
+        sys.exit(1)
+
+    lives = response["lives"][0]
+    weather = lives["weather"]
+    real_temp = lives["temperature"]
+    wind_dir = lives["winddirection"] + "风"
+
+    # 占位字段，确保模板不空
+    min_temp = "18"
+    max_temp = "28"
+    sunrise = "05:10"
+    sunset = "19:00"
+
+    return weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset
+
+
+def get_birthday(birthday_str, today):
+    """
+    修复后的生日计算函数，直接接收字符串，不再传入year
+    """
+    if birthday_str.startswith("r-"):
+        # 农历生日
+        parts = birthday_str.split("-")
+        month = int(parts[1])
+        day = int(parts[2])
+        birth_date = ZhDate(today.year, month, day).to_datetime().date()
+        if birth_date < today:
+            birth_date = ZhDate(today.year + 1, month, day).to_datetime().date()
+    else:
+        # 公历生日
+        birth_parts = birthday_str.split("-")
+        month = int(birth_parts[1])
+        day = int(birth_parts[2])
+        birth_date = date(today.year, month, day)
+        if birth_date < today:
+            birth_date = date(today.year + 1, month, day)
+
+    days_left = (birth_date - today).days
+    return days_left
+
+
+# 固定土味情话库
+def get_love_words():
+    words = [
+        "我喜欢你，不是一时兴起，而是蓄谋已久",
+        "世界纷纷扰扰，还好我有你",
+        "目光所及皆是你，心之所向也是你",
+        "有幸相遇，恰好合拍，岁岁年年都想和你"
     ]
-    location = "118.85,35.06"  # 临沂 经度,纬度
-    
-    for api_key in key_list:
-        try:
-            # 官方 每日天气预报接口
-            url = "https://devapi.qweather.com/v7/weather/3d"
-            params = {
-                "location": location,
-                "key": api_key
-            }
-            resp = requests.get(url, params=params, timeout=15)
-            res_json = resp.json()
-            
-            # 判断接口返回成功码
-            if res_json.get("code") == "200":
-                now_url = "https://devapi.qweather.com/v7/weather/now"
-                now_resp = requests.get(now_url,params=params,timeout=15)
-                now_json = now_resp.json()
-                
-                if now_json.get("code") != "200":
-                    continue
-                
-                today_forecast = res_json["daily"][0]
-                now_info = now_json["now"]
-                
-                weather_data = {
-                    "weather": now_info["text"],
-                    "temp_now": now_info["temp"],
-                    "temp_min": today_forecast["tempMin"],
-                    "temp_max": today_forecast["tempMax"],
-                    "wind_dir": now_info["windDir"],
-                    "sunrise": today_forecast["sunrise"],
-                    "sunset": today_forecast["sunset"]
-                }
-                return weather_data
-
-        except Exception:
-            # 请求超时、网络异常则切换下一条密钥
-            continue
-    
-    # 所有密钥全部尝试完毕依旧失败，退出程序，放弃推送
-    print("❌ 全部密钥尝试之后依旧异常 code≠200，放弃推送")
-    sys.exit(1)
+    return words[0], words[1], words[2], words[3]
 
 
-# 调用测试
-if __name__ == "__main__":
-    data = get_weather()
-    print(data)
-def calc_day_count(start_date):
-    try:
-        start = datetime.strptime(start_date, "%Y-%m-%d")
-        now = datetime.now()
-        return str((now - start).days + 1)
-    except Exception as e:
-        print("❌ 恋爱天数计算失败", e)
-        sys.exit(1)
+# 固定脑筋急转弯库
+def get_riddle():
+    q1 = "什么东西越洗越脏？"
+    q2 = "什么门永远关不上？"
+    q3 = "什么书里毛病最多？"
+    q4 = "什么水永远用不完？"
+    a1 = "答案：水"
+    a2 = "答案：球门"
+    a3 = "答案：医学书"
+    a4 = "答案：泪水"
+    return q1, q2, q3, q4, a1, a2, a3, a4
 
-def get_birthday_left(birth_month_day):
-    try:
-        month, day = map(int, birth_month_day.split("-"))
-        today = datetime.now()
-        target_year = today.year
-        target = datetime(target_year, month, day)
-        if target < today:
-            target = datetime(target_year + 1, month, day)
-        return str((target - today).days)
-    except Exception as e:
-        print("❌ 生日倒计时计算失败", e)
-        sys.exit(1)
 
-def send_msg(token, openid, weather_data, love_days, day1_left, day2_left):
-    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}"
-    payload = {
-        "touser": openid,
-        "template_id": conf["template_id"],
+def send_message(to_user, access_token, city_name, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset):
+    url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
+    week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
+    today = date.today()
+    week = week_list[today.isoweekday() % 7]
+
+    love_year = int(config["love_date"].split("-")[0])
+    love_month = int(config["love_date"].split("-")[1])
+    love_day = int(config["love_date"].split("-")[2])
+    love_date = date(love_year, love_month, love_day)
+    love_days = (today - love_date).days
+
+    # 生日
+    birth1 = config["birthday1"]
+    birth2 = config["birthday2"]
+    birth_day1 = get_birthday(birth1["birthday"], today)
+    birth_day2 = get_birthday(birth2["birthday"], today)
+    birthday1_data = f"距离{birth1['name']}的生日还有{birth_day1}天"
+    birthday2_data = f"距离{birth2['name']}的生日还有{birth_day2}天"
+
+    # 情话 + 脑筋急转弯
+    l1, l2, l3, l4 = get_love_words()
+    rq1, rq2, rq3, rq4, ra1, ra2, ra3, ra4 = get_riddle()
+
+    data = {
+        "touser": to_user,
+        "template_id": config["template_id"],
+        "url": "http://weixin.qq.com/download",
+        "topcolor": "#FF0000",
         "data": {
-            "date": {"value": datetime.now().strftime("%Y-%m-%d %A")},
-            "city": {"value": "临沂"},
-            "weather": {"value": weather_data["weather"]},
-            "temp_now": {"value": weather_data["temp_now"] + "℃"},
-            "temp_min": {"value": weather_data["temp_min"] + "℃"},
-            "temp_max": {"value": weather_data["temp_max"] + "℃"},
-            "wind": {"value": weather_data["wind_dir"]},
-            "sunrise": {"value": weather_data["sunrise"]},
-            "sunset": {"value": weather_data["sunset"]},
-            "love_days": {"value": love_days},
-            "birth1": {"value": day1_left},
-            "birth2": {"value": day2_left}
+            "date": {"value": f"{today} {week}", "color": get_color()},
+            "city": {"value": city_name, "color": get_color()},
+            "weather": {"value": weather, "color": get_color()},
+            "real_temp": {"value": real_temp, "color": get_color()},
+            "min_temperature": {"value": min_temp, "color": get_color()},
+            "max_temperature": {"value": max_temp, "color": get_color()},
+            "wind_direction": {"value": wind_dir, "color": get_color()},
+            "sunrise": {"value": sunrise, "color": get_color()},
+            "sunset": {"value": sunset, "color": get_color()},
+            "love_day": {"value": love_days, "color": get_color()},
+            "birthday1": {"value": birthday1_data, "color": get_color()},
+            "birthday2": {"value": birthday2_data, "color": get_color()},
+            "love1": {"value": l1, "color": get_color()},
+            "love2": {"value": l2, "color": get_color()},
+            "love3": {"value": l3, "color": get_color()},
+            "love4": {"value": l4, "color": get_color()},
+            "riddle_q1": {"value": rq1, "color": get_color()},
+            "riddle_q2": {"value": rq2, "color": get_color()},
+            "riddle_q3": {"value": rq3, "color": get_color()},
+            "riddle_q4": {"value": rq4, "color": get_color()},
+            "riddle_ans1": {"value": ra1, "color": get_color()},
+            "riddle_ans2": {"value": f"{ra2} {ra3} {ra4}", "color": get_color()}
         }
     }
-    resp = requests.post(url, json=payload, timeout=15).json()
-    if resp.get("errcode") != 0:
-        print(f"❌ 推送失败 openid:{openid}", resp)
+
+    headers = {'Content-Type': 'application/json'}
+    response = post(url, headers=headers, json=data, timeout=15).json()
+    if response.get("errcode") == 0:
+        print("✅ 推送成功")
     else:
-        print(f"✅ 推送成功 openid:{openid}")
+        print("❌ 推送失败：", response)
 
-if __name__ == '__main__':
-    access_token = get_access_token()
-    weather_info = get_weather_all()
-    together_days = calc_day_count(conf["love_date"])
-    jiao_left = get_birthday_left(conf["birthday1"]["birthday"])
-    zhang_left = get_birthday_left(conf["birthday2"]["birthday"])
 
-    for open_id in conf["user"]:
-        send_msg(access_token, open_id, weather_info, together_days, jiao_left, zhang_left)
+if __name__ == "__main__":
+    try:
+        with open("config.txt", encoding="utf-8") as f:
+            config = eval(f.read())
+    except Exception as e:
+        print("配置文件读取失败：", e)
+        sys.exit(1)
+
+    accessToken = get_access_token()
+    users = config["user"]
+    city = "临沂"
+
+    weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset = get_weather(city)
+
+    for user in users:
+        send_message(user, accessToken, city, weather, real_temp, min_temp, max_temp, wind_dir, sunrise, sunset)
