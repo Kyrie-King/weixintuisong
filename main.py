@@ -3,7 +3,7 @@ import requests
 from datetime import datetime
 import ephem
 
-# ========== 加载配置文件 强制调试打印 ==========
+# ========== 加载配置文件 ==========
 try:
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -19,7 +19,6 @@ GAODE_KEY = config["gaode_key"]
 ADCODE = config["adcode"]
 REGION = config["region"]
 
-# 关键调试：打印读取到的公众号AppID
 print(f"【调试信息】已读取到 app_id = {WX_APPID}")
 
 
@@ -35,9 +34,10 @@ def get_access_token():
         raise Exception(f"获取token失败:{res}")
 
 
-# ========== 获取高德天气 ==========
+# ========== 获取高德天气预报（指定获取预报数据） ==========
 def get_weather():
-    url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}"
+    # parameters=all 获取全部预报，一定会返回 forecasts
+    url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
     resp = requests.get(url, timeout=15).json()
     print("高德返回数据：", resp)
     today_info = resp["forecasts"][0]["casts"][0]
@@ -48,7 +48,7 @@ def get_weather():
         "temp_high": today_info["daytemp"],
         "wind_dir": f'{today_info["daywind"]}风 {today_info["daypower"]}级'
     }
-    # 临沂经纬度计算日出日落
+    # 临沂经纬度日出日落
     observer = ephem.Observer()
     observer.lat, observer.lon = '35.06', '118.33'
     sun = ephem.Sun()
@@ -80,14 +80,12 @@ def send_wx_template(access_token, openid, weather):
 
 # ========== 主入口 ==========
 if __name__ == "__main__":
-    try:
-        token = get_access_token()
-        weather_info = get_weather()
-        for openid in USER_OPENID_LIST:
-            send_wx_template(token, openid, weather_info)
-        print("✅ 微信模板消息推送完毕")
-    except Exception as err:
-        print(f"❌程序异常：{err}")
+    token = get_access_token()
+    weather_info = get_weather()
+    for openid in USER_OPENID_LIST:
+        send_wx_template(token, openid, weather_info)
+    print("✅ 微信模板消息推送完毕")
+
 
 def get_love_day_count():
     start = datetime.strptime(config["love_date"], "%Y-%m-%d").date()
