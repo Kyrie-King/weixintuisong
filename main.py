@@ -1,116 +1,119 @@
 import requests
 import json
-import os
 import sys
 from datetime import datetime
 
-# 你的全部配置
 conf = {
     "app_id": "wxe56a269a1ad4ca32",
     "app_secret": "1ecaa3c14689d2a9d232b3dec9c82026",
     "template_id": "CIDOS0Xso8pGa3tvHN1vnsF8dIRQOitbPlAeVuqXXaE",
     "user": ["oWI8T3D6BIR55LSHqDmUu3i91tDU","oWI8T3KwC0WLy_NTI_HEtD5Z43Go"],
     "weather_key": "2c4595bee21046ec8de24159b74b4d8d",
-    "city_code": "101120913",
-    "gaode_key": "32b673b0e64f0b215ebd507640a8a474",
-    "region": "101120101",
-    "birthday1": {"name": "娇娇", "birthday": "r-03-07"},
-    "birthday2": {"name": "张喆", "birthday": "r-10-24"},
+    "birthday1": {"name": "娇娇", "birthday": "03-07"},
+    "birthday2": {"name": "张喆", "birthday": "10-24"},
     "love_date": "2024-06-29",
-    "note_ch": "",
-    "note_en": ""
 }
 
-APPID = conf["app_id"]
-APPSECRET = conf["app_secret"]
-TEMPLATE_ID = conf["template_id"]
-USER_LIST = conf["user"]
-# 使用刚创建、无IP限制的全新和风密钥
 QWEATHER_API_KEY = conf["weather_key"]
-# 临沂河东区经纬度
-HE_DONG_LON = "118.40"
-HE_DONG_LAT = "35.08"
-note_ch = conf["note_ch"]
-note_en = conf["note_en"]
-
+LON, LAT = "118.40", "35.08"
 
 def get_access_token():
-    url = (f"https://api.weixin.qq.com/cgi-bin/token"
-           f"?grant_type=client_credential&appid={APPID}&secret={APPSECRET}")
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={conf['app_id']}&secret={conf['app_secret']}"
     res = requests.get(url,timeout=15).json()
     if "access_token" not in res:
-        print("获取微信token失败",res)
+        print("❌ Token获取失败，终止推送", res)
         sys.exit(1)
     return res["access_token"]
 
-
-def get_weather():
-    # 获取实时天气
-    url_now = (f"https://devapi.qweather.com/v7/weather/now"
-               f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
+def get_weather_all():
+    url_now = f"https://devapi.qweather.com/v7/weather/now?location={LON},{LAT}&key={QWEATHER_API_KEY}"
     resp_now = requests.get(url_now, timeout=15).json()
-    print("天气接口返回数据：", resp_now)
+    url_3d = f"https://devapi.qweather.com/v7/weather/3d?location={LON},{LAT}&key={QWEATHER_API_KEY}"
+    resp_3d = requests.get(url_3d, timeout=15).json()
 
-    # 请求失败直接返回兜底天气，防止程序崩溃
-    if resp_now.get("code") != "200":
-        print("和风天气请求失败，code：" + str(resp_now.get("code")))
-        return "多云","26","22","32","南风"
-        
-    now_data = resp_now["now"]
+    # 两个接口必须全部正常返回200，缺少任意字段直接退出
+    if resp_now.get("code") != "200" or resp_3d.get("code") != "200":
+        print("❌ 天气接口返回异常 code≠200，放弃推送")
+        sys.exit(1)
 
-    # 获取三日天气预报
-    url_day = (f"https://devapi.qweather.com/v7/weather/3d"
-               f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
-    resp_day = requests.get(url_day, timeout=15).json()
-    if resp_day.get("code") == "200":
-        today_info = resp_day["daily"][0]
-    else:
-        today_info = {"tempMin":"22","tempMax":"32"}
+    now = resp_now["now"]
+    today = resp_3d["daily"][0]
+    # 校验所有必填字段，不存在就终止
+    need_keys_now = ["text", "temp", "windDir"]
+    need_keys_daily = ["tempMin", "tempMax", "sunrise", "sunset"]
+    for k in need_keys_now:
+        if k not in now:
+            print(f"❌ 实时天气缺失字段:{k}")
+            sys.exit(1)
+    for k in need_keys_daily:
+        if k not in today:
+            print(f"❌ 预报天气缺失字段:{k}")
+            sys.exit(1)
 
-    weather = now_data["text"]
-    real_temp = now_data["temp"]
-    min_temp = today_info["tempMin"]
-    max_temp = today_info["tempMax"]
-    wind_dir = now_data["windDir"]
-    return weather, real_temp, min_temp, max_temp, wind_dir
+    return {
+        "weather": now["text"],
+        "temp_now": now["temp"],
+        "temp_min": today["tempMin"],
+        "temp_max": today["tempMax"],
+        "wind_dir": now["windDir"],
+        "sunrise": today["sunrise"],
+        "sunset": today["sunset"]
+    }
 
-
-def get_ciba():
-    if note_ch != "" and note_en != "":
-        return note_ch, note_en
+def calc_day_count(start_date):
     try:
-        r = requests.get("http://open.iciba.com/dsapi/",timeout=10)
-        res = r.json()
-        return res["content"], res["note"]
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        now = datetime.now()
+        return str((now - start).days + 1)
     except Exception as e:
-        print("获取每日一句失败",e)
-        return "愿今日顺遂无忧","Have a nice day"
+        print("❌ 恋爱天数计算失败", e)
+        sys.exit(1)
 
+def get_birthday_left(birth_month_day):
+    try:
+        month, day = map(int, birth_month_day.split("-"))
+        today = datetime.now()
+        target_year = today.year
+        target = datetime(target_year, month, day)
+        if target < today:
+            target = datetime(target_year + 1, month, day)
+        return str((target - today).days)
+    except Exception as e:
+        print("❌ 生日倒计时计算失败", e)
+        sys.exit(1)
 
-def send_msg(access_token, openid, weather, real_temp, min_temp, max_temp, wind_dir, saying_text):
-    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
-    post_data = {
+def send_msg(token, openid, weather_data, love_days, day1_left, day2_left):
+    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}"
+    payload = {
         "touser": openid,
-        "template_id": TEMPLATE_ID,
+        "template_id": conf["template_id"],
         "data": {
-            "weather": {"value": weather},
-            "real_temp": {"value": real_temp + "℃"},
-            "min_temp": {"value": min_temp + "℃"},
-            "max_temp": {"value": max_temp + "℃"},
-            "wind_dir": {"value": wind_dir},
-            "saying": {"value": saying_text}
+            "date": {"value": datetime.now().strftime("%Y-%m-%d %A")},
+            "city": {"value": "临沂"},
+            "weather": {"value": weather_data["weather"]},
+            "temp_now": {"value": weather_data["temp_now"] + "℃"},
+            "temp_min": {"value": weather_data["temp_min"] + "℃"},
+            "temp_max": {"value": weather_data["temp_max"] + "℃"},
+            "wind": {"value": weather_data["wind_dir"]},
+            "sunrise": {"value": weather_data["sunrise"]},
+            "sunset": {"value": weather_data["sunset"]},
+            "love_days": {"value": love_days},
+            "birth1": {"value": day1_left},
+            "birth2": {"value": day2_left}
         }
     }
-    headers = {"Content-Type": "application/json"}
-    requests.post(url, data=json.dumps(post_data), headers=headers,timeout=15)
-
+    resp = requests.post(url, json=payload, timeout=15).json()
+    if resp.get("errcode") != 0:
+        print(f"❌ 推送失败 openid:{openid}", resp)
+    else:
+        print(f"✅ 推送成功 openid:{openid}")
 
 if __name__ == '__main__':
-    token = get_access_token()
-    weather, real_temp, min_temp, max_temp, wind_dir = get_weather()
-    ch_text,en_text = get_ciba()
+    access_token = get_access_token()
+    weather_info = get_weather_all()
+    together_days = calc_day_count(conf["love_date"])
+    jiao_left = get_birthday_left(conf["birthday1"]["birthday"])
+    zhang_left = get_birthday_left(conf["birthday2"]["birthday"])
 
-    for one_openid in USER_LIST:
-        send_msg(token, one_openid, weather, real_temp, min_temp, max_temp, wind_dir, ch_text)
-
-    print("✅ 微信消息推送执行完毕")
+    for open_id in conf["user"]:
+        send_msg(access_token, open_id, weather_info, together_days, jiao_left, zhang_left)
