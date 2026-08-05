@@ -2,20 +2,25 @@ import requests
 import json
 import os
 import sys
-import time
 from datetime import datetime
 
-# ----------------------读取json配置文件----------------------
-def read_config():
-    cfg_path = "config.json"
-    if not os.path.exists(cfg_path):
-        print("错误：当前目录找不到 config.json 配置文件")
-        sys.exit(1)
-    with open(cfg_path, "r", encoding="utf‑8") as f:
-        conf = json.load(f)
-    return conf
-
-conf = read_config()
+# ==========直接粘贴你的全部配置，不再读取外部文件==========
+conf = {
+    "app_id": "wxe56a269a1ad4ca32",
+    "app_secret": "1ecaa3c14689d2a9d232b3dec9c82026",
+    "template_id": "CIDOS0Xso8pGa3tvHN1vnsF8dIRQOitbPlAeVuqXXaE",
+    "user": ["oWI8T3D6BIR55LSHqDmUu3i91tDU","oWI8T3KwC0WLy_NTI_HEtD5Z43Go"],
+    "weather_key": "4115864138f647969ab28d83a463829a",
+    "hefeng_key": "2c4595bee21046ec8de24159b74b4d8d",
+    "city_code": "101120913",
+    "gaode_key": "32b673b0e64f0b215ebd507640a8a474",
+    "region": "101120101",
+    "birthday1": {"name": "娇娇", "birthday": "r-03-07"},
+    "birthday2": {"name": "张喆", "birthday": "r-10-24"},
+    "love_date": "2024-06-29",
+    "note_ch": "",
+    "note_en": ""
+}
 
 # ============加载公众号参数============
 APPID = conf["app_id"]
@@ -23,23 +28,18 @@ APPSECRET = conf["app_secret"]
 TEMPLATE_ID = conf["template_id"]
 USER_LIST = conf["user"]
 
-# ============和风天气参数（废弃高德）============
-# 优先使用 weather_key
+# ============和风天气参数，已经废弃高德============
 QWEATHER_API_KEY = conf["weather_key"]
-# 临沂市河东区 经纬度
+# 临沂市河东区经纬度
 HE_DONG_LON = "118.40"
 HE_DONG_LAT = "35.08"
 
-# ============各类纪念日配置============
-birthday1 = conf["birthday1"]
-birthday2 = conf["birthday2"]
-love_date = conf["love_date"]
 note_ch = conf["note_ch"]
 note_en = conf["note_en"]
 
 # ----------------------获取微信access_token----------------------
 def get_access_token():
-    url = (f"https://api.weixin.qq.com/cgi‑bin/token"
+    url = (f"https://api.weixin.qq.com/cgi-bin/token"
            f"?grant_type=client_credential&appid={APPID}&secret={APPSECRET}")
     res = requests.get(url,timeout=15).json()
     if "access_token" not in res:
@@ -47,15 +47,13 @@ def get_access_token():
         sys.exit(1)
     return res["access_token"]
 
-# ----------------------和风天气函数，兼容旧调用参数----------------------
+# ----------------------和风天气接口函数----------------------
 def get_weather(city_adcode):
-    # 获取实时天气
     url_now = (f"https://devapi.qweather.com/v7/weather/now"
                f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
     resp_now = requests.get(url_now, timeout=15).json()
     now_data = resp_now["now"]
 
-    # 获取今日最高最低气温
     url_day = (f"https://devapi.qweather.com/v7/weather/3d"
                f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
     resp_day = requests.get(url_day, timeout=15).json()
@@ -68,7 +66,7 @@ def get_weather(city_adcode):
     wind_dir = now_data["windDir"]
     return weather, real_temp, min_temp, max_temp, wind_dir
 
-# ----------------------每日一句接口----------------------
+# ----------------------每日一句----------------------
 def get_ciba():
     if note_ch != "" and note_en != "":
         return note_ch, note_en
@@ -80,10 +78,9 @@ def get_ciba():
         print("获取每日金句失败",e)
         return "愿今日顺遂无忧","Have a nice day"
 
-
-# ----------------------发送模板消息（支持多用户）----------------------
+# ----------------------发送模板消息----------------------
 def send_msg(access_token, openid, weather, real_temp, min_temp, max_temp, wind_dir, saying_text):
-    url = f"https://api.weixin.qq.com/cgi‑bin/message/template/send?access_token={access_token}"
+    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     post_data = {
         "touser": openid,
         "template_id": TEMPLATE_ID,
@@ -96,25 +93,16 @@ def send_msg(access_token, openid, weather, real_temp, min_temp, max_temp, wind_
             "saying": {"value": saying_text}
         }
     }
-    headers = {"Content‑Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
     requests.post(url, data=json.dumps(post_data), headers=headers,timeout=15)
-
-
-# ----------------------农历生日计算工具----------------------
-def get_lunar_birthday_left(target_month,target_day):
-    #此处你原有农历倒计时逻辑保持原样，下面为主入口
-    pass
 
 
 if __name__ == '__main__':
     token = get_access_token()
-    # 传参仅为兼容旧函数，参数不再使用
     weather, real_temp, min_temp, max_temp, wind_dir = get_weather(None)
     ch_text,en_text = get_ciba()
-    send_content = ch_text
 
-    #循环给全部接收人推送消息
     for one_openid in USER_LIST:
-        send_msg(token, one_openid, weather, real_temp, min_temp, max_temp, wind_dir, send_content)
+        send_msg(token, one_openid, weather, real_temp, min_temp, max_temp, wind_dir, ch_text)
 
     print("✅ 全部消息推送执行完毕")
