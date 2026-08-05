@@ -110,7 +110,7 @@ def send_one_user(openid, weather_info, access_token):
     requests.post(url, json=body)
 
 def main():
-    weather = get_gaode_weather()
+    weather = get_weather()
     token = get_access_token()
     for openid in config["user"]:
         send_one_user(openid, weather, token)
