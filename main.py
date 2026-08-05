@@ -43,11 +43,11 @@ def calc_sunrise_sunset():
 
 def get_gaode_weather():
     url = "https://restapi.amap.com/v3/weather/weatherInfo"
-    params = {
-        "key": config["gaode_key"],
-        "city": config["adcode"],
-        "extensions": "all"
-    }
+   params = {
+    "key": os.getenv("GAODE_KEY"),
+    "city": "371300",
+    "extensions": "all"
+}
     res = requests.get(url, params=params, timeout=12).json()
     #打印接口返回全部内容，方便排查
     print("高德返回数据：",res)
