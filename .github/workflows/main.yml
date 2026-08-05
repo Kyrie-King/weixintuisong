@@ -2,26 +2,22 @@ name: 每日微信推送
 
 on:
   schedule:
-    # 每天早上 7:30 推送（北京时间，UTC+8 → UTC 23:30 前一天）
     - cron: '30 23 * * *'
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 设置 Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 安装依赖
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: 生成配置文件
+      - name: 执行推送
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
@@ -33,25 +29,4 @@ jobs:
           BIRTHDAY1_DATE: ${{ secrets.BIRTHDAY1_DATE }}
           BIRTHDAY2_NAME: ${{ secrets.BIRTHDAY2_NAME }}
           BIRTHDAY2_DATE: ${{ secrets.BIRTHDAY2_DATE }}
-        run: |
-          cat > config.txt << 'EOF'
-          {
-              "app_id": "$APP_ID",
-              "app_secret": "$APP_SECRET",
-              "template_id": "$TEMPLATE_ID",
-              "gaode_key": "$GAODE_KEY",
-              "user": $USER,
-              "love_date": "$LOVE_DATE",
-              "birthday1": {
-                  "name": "$BIRTHDAY1_NAME",
-                  "birthday": "$BIRTHDAY1_DATE"
-              },
-              "birthday2": {
-                  "name": "$BIRTHDAY2_NAME",
-                  "birthday": "$BIRTHDAY2_DATE"
-              }
-          }
-          EOF
-
-      - name: 执行推送
         run: python main.py
