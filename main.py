@@ -31,59 +31,30 @@ def get_access_token():
     return access_token
 
 
-def get_weather(city_adcode):
-    """
-    获取天气数据（实时 + 今日预报）
-    返回：天气状况、实时温度、最低温、最高温、风向
-    最低/最高温从高德预报接口真实获取，不再写死
-    """
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    key = config["gaode_key"]
-    weather_url = "https://restapi.amap.com/v3/weather/weatherInfo"
+import requests
+# 填入你的和风key
+QWEATHER_KEY = "2c4595bee21046ec8de24159b74b4d8d"
+lon,lat = "118.33","35.02"
 
-    # ===== 1. 实时天气 =====
-    params_base = {
-        "city": city_adcode,
-        "key": key,
-        "extensions": "base",
-        "output": "json"
-    }
-    try:
-        resp = get(weather_url, headers=headers, params=params_base, timeout=15)
-        response = resp.json()
-    except Exception as e:
-        print(f"实时天气请求失败：{e}")
-        sys.exit(1)
+def get_weather():
+    # 获取实时天气
+    url_now = f"https://devapi.qweather.com/v7/weather/now?location={lon},{lat}&key={QWEATHER_KEY}"
+    res_now = requests.get(url_now).json()
+    now = res_now["now"]
+    weather_text = now["text"]        #天气状况
+    temp = now["temp"]                 #实时气温
+    windDir = now["windDir"]          #风向
+    windScale = now["windScale"]     #风力等级
 
-    if response.get("status") != "1":
-        print(f"天气API错误：{response}")
-        sys.exit(1)
+    #获取3日预报
+    url_3d = f"https://devapi.qweather.com/v7/weather/3d?location={lon},{lat}&key={QWEATHER_KEY}"
+    res_3d = requests.get(url_3d).json()
+    today_forecast = res_3d["daily"][0]
+    temp_max = today_forecast["tempMax"]
+    temp_min = today_forecast["tempMin"]
 
-    lives = response["lives"][0]
-    weather = lives["weather"]
-    real_temp = lives["temperature"]
-    wind_dir = lives["winddirection"] + "风"
-
-    # ===== 2. 今日预报（真实高低温）=====
-    try:
-        params_all = {
-            "city": city_adcode,
-            "key": key,
-            "extensions": "all",
-            "output": "json"
-        }
-        resp_all = get(weather_url, headers=headers, params=params_all, timeout=15)
-        all_data = resp_all.json()
-        if all_data.get("status") != "1" or not all_data.get("forecasts"):
-            raise Exception(f"预报API返回异常：{all_data}")
-        today_cast = all_data["forecasts"][0]["casts"][0]
-        min_temp = today_cast["nighttemp"]
-        max_temp = today_cast["daytemp"]
-    except Exception as e:
-        print(f"❌ 获取预报天气失败：{e}")
-        sys.exit(1)
-
-    return weather, real_temp, min_temp, max_temp, wind_dir
+    info = f"🌤现在天气：{weather_text}\n🌡温度：{temp}℃（{temp_min}~{temp_max}℃）\n💨{windDir}{windScale}级"
+    return info
 
 
 def get_sunrise_sunset(city_adcode):
