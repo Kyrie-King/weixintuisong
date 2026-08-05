@@ -2,6 +2,7 @@ import json
 import requests
 from datetime import datetime, date
 import ephem
+import time
 
 # ========== 加载配置文件 config.json ==========
 try:
@@ -30,20 +31,42 @@ zhangzhe_birth = date(2004, 10, 12)    # 张喆生日
 def get_access_token():
     url = (f"https://api.weixin.qq.com/cgi-bin/token"
            f"?grant_type=client_credential&appid={WX_APPID}&secret={WX_SECRET}")
-    res = requests.get(url, timeout=15).json()
+    res = requests.get(url, timeout=30, verify=False).json()
     print("微信token返回：", res)
     if "access_token" in res:
         return res["access_token"]
     else:
         raise Exception(f"获取token失败:{res}")
 
-# ========== 获取高德实时天气+预报天气 ==========
+# ========== 获取高德天气，加入重试、超时、异常兜底 ==========
 def get_weather():
-    # extensions=all 返回实况 + 多天预报
     url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
-    resp = requests.get(url, timeout=15).json()
-    print("高德返回数据：", resp)
-    
+    retry_times = 3
+    resp = None
+    for i in range(retry_times):
+        try:
+            resp = requests.get(url, timeout=30, verify=False).json()
+            if resp.get("status") == "1":
+                break
+        except Exception as e:
+            print(f"第{i+1}次请求高德超时，正在重试,错误:{e}")
+            time.sleep(2)
+
+    # 请求失败兜底默认天气，防止程序直接崩溃终止推送
+    if resp is None or resp.get("status") != "1":
+        print("高德天气接口全部重试失败，启用兜底天气数据")
+        weather_data = {
+            "city": REGION,
+            "weather":"多云",
+            "real_temp":"32",
+            "min_temperature":"19",
+            "max_temperature":"29",
+            "wind_direction":"东南风 3级",
+            "sunrise":"05:10",
+            "sunset":"19:00"
+        }
+        return weather_data
+
     live_info = resp["lives"][0]          # 实时天气
     forecast_today = resp["forecasts"][0]["casts"][0] # 今日预报
 
@@ -79,7 +102,6 @@ def calc_day_num():
             if next_b < today:
                 next_b = date(today.year + 1, birth.month, birth.day)
         except ValueError:
-            # 处理2‑29闰年
             next_b = date(today.year+1, birth.month, birth.day)
         return (next_b - today).days
 
@@ -92,7 +114,7 @@ def calc_day_num():
     return now_date_str, love_day, birthday1, birthday2
 
 
-# ========== 发送微信模板消息（键完全匹配你的模板） ==========
+# ========== 发送微信模板消息（键严格匹配你的模板） ==========
 def send_wx_template(access_token, openid, weather, date_str, love_day, b1, b2):
     api_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     post_data = {
@@ -113,7 +135,7 @@ def send_wx_template(access_token, openid, weather, date_str, love_day, b1, b2):
             "birthday2": {"value": b2}
         }
     }
-    result = requests.post(api_url, json=post_data).json()
+    result = requests.post(api_url, json=post_data,timeout=30,verify=False).json()
     print(f"推送用户{openid}返回结果：{result}")
 
 
@@ -126,83 +148,3 @@ if __name__ == "__main__":
     for openid in USER_OPENID_LIST:
         send_wx_template(token, openid, weather_info, date_text, together_days, info_birth1, info_birth2)
     print("✅ 娇娇专属推送执行完毕")
-
-
-def get_love_day_count():
-    start = datetime.strptime(config["love_date"], "%Y-%m-%d").date()
-    now = date.today()
-    return (now - start).days + 1
-
-
-def check_lunar_birthday(birth_str, name):
-    today = date.today()
-    if birth_str.startswith("r-"):
-        m, d = map(int, birth_str.replace("r-", "").split("-"))
-        lunar_now = ZhDate.from_datetime(datetime.now())
-        if lunar_now.month == m and lunar_now.day == d:
-            return f"🎉今天是{name}的农历生日！"
-    return ""
-
-
-def get_sentence():
-    if config["note_ch"] != "" and config["note_en"] != "":
-        return config["note_ch"], config["note_en"]
-    try:
-        r = requests.get("https://api.shadiao.pro/chp", timeout=8).json()
-        return r["data"]["text"], "Have a nice‑day."
-    except Exception:
-        return "今天也要保持好心情", "Wish you happy every day"
-
-
-def get_access_token():
-    appid = os.getenv("app_id")
-    secret = os.getenv("app_secret")
-    url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appid}&secret={secret}'
-    res = requests.get(url,timeout=15).json()
-    print("微信token返回：",res) #打印返回信息查看错误
-    if "access_token" in res:
-        return res['access_token']
-    else:
-        raise Exception(f"获取token失败:{res}")
-
-
-def send_one_user(openid, weather_info, access_token):
-    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
-    ch_text, en_text = get_sentence()
-    b1_tip = check_lunar_birthday(config["birthday1"]["birthday"], config["birthday1"]["name"])
-    b2_tip = check_lunar_birthday(config["birthday2"]["birthday"], config["birthday2"]["name"])
-    body = {
-        "touser": openid,
-        "template_id": config["template_id"],
-        "data": {
-            "date": {"value": datetime.now().strftime("%Y‑%m‑%d")},
-            "region": {"value": weather_info["region"]},
-            "weather": {"value": weather_info["weather"]},
-            "temp": {"value": f'{weather_info["temp_low"]}~{weather_info["temp_high"]}℃，当前{weather_info["now_temp"]}℃'},
-            "wind_dir": {"value": weather_info["wind_dir"]},
-            "sunrise": {"value": weather_info["sunrise"]},
-            "sunset": {"value": weather_info["sunset"]},
-            "love_day": {"value": get_love_day_count()},
-            "birthday1": {"value": b1_tip},
-            "birthday2": {"value": b2_tip},
-            "note_en": {"value": en_text},
-            "note_ch": {"value": ch_text}
-        }
-    }
-    requests.post(url, json=body)
-
-
-def main():
-    weather = get_weather()
-    token = get_access_token()
-    for openid in config["user"]:
-        send_one_user(openid, weather, token)
-    print("✅全部用户推送完毕")
-
-
-# 只保留唯一程序入口，不会重复执行
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as err:
-        print(f"❌程序异常：{err}")
