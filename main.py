@@ -401,17 +401,8 @@ def load_config():
 
 
 if __name__ == "__main__":
-    # 优先从环境变量读取（GitHub Actions 模式）
-    if os.environ.get("APP_ID"):
-        config = load_config()
-    else:
-        # 本地运行 fallback：读取 config.txt
-        try:
-            with open("config.txt", encoding="utf-8") as f:
-                config = eval(f.read())
-        except Exception as e:
-            print(f"配置文件读取失败：{e}")
-            sys.exit(1)
+    # 从环境变量加载配置（GitHub Actions / 本地都用环境变量）
+    config = load_config()
 
     accessToken = get_access_token()
     users = config["user"]
