@@ -26,38 +26,41 @@ def get_access_token():
     return res["access_token"]
 
 def get_weather_all():
-    max_retry = 3
-    for attempt in range(max_retry):
-        try:
-            url_now = f"https://devapi.qweather.com/v7/weather/now?location={LON},{LAT}&key={QWEATHER_API_KEY}"
-            resp_now = requests.get(url_now, timeout=15).json()
-            url_3d = f"https://devapi.qweather.com/v7/weather/3d?location={LON},{LAT}&key={QWEATHER_API_KEY}"
-            resp_3d = requests.get(url_3d, timeout=15).json()
+    # 填入你的两个API‑KEY
+    key_list = [
+        "2c4595bee21046ec8de24159b74b4d8d",
+        "4115864138f647969ab28d83a463829a",
+        "d9fd4a0ab55d4b14a45ea7ec31ecc5a8"
+    ]
+    LON, LAT = "118.85", "35.06" #临沂经纬度
 
-            if resp_now.get("code") == "200" and resp_3d.get("code") == "200":
-                now = resp_now["now"]
-                today = resp_3d["daily"][0]
-                need_keys_now = ["text", "temp", "windDir"]
-                need_keys_daily = ["tempMin", "tempMax", "sunrise", "sunset"]
-                for k in need_keys_now:
-                    if k not in now:
-                        raise KeyError()
-                for k in need_keys_daily:
-                    if k not in today:
-                        raise KeyError()
+    for one_key in key_list:
+        max_retry = 2
+        for attempt in range(max_retry):
+            try:
+                url_now = f"https://devapi.qweather.com/v7/weather/now?location={LON},{LAT}&key={one_key}"
+                resp_now = requests.get(url_now, timeout=15).json()
+                url_3d = f"https://devapi.qweather.com/v7/weather/3d?location={LON},{LAT}&key={one_key}"
+                resp_3d = requests.get(url_3d, timeout=15).json()
 
-                return {
-                    "weather": now["text"],
-                    "temp_now": now["temp"],
-                    "temp_min": today["tempMin"],
-                    "temp_max": today["tempMax"],
-                    "wind_dir": now["windDir"],
-                    "sunrise": today["sunrise"],
-                    "sunset": today["sunset"]
-                }
-        except Exception:
-            print(f"第{attempt+1}次天气请求失败，正在重试")
-    print("❌ 天气接口多次尝试之后依旧异常 code≠200，放弃推送")
+                if resp_now.get("code") == "200" and resp_3d.get("code") == "200":
+                    now = resp_now["now"]
+                    today = resp_3d["daily"][0]
+                    need_keys_now = ["text", "temp", "windDir"]
+                    need_keys_daily = ["tempMin", "tempMax", "sunrise", "sunset"]
+                    if all(k in now for k in need_keys_now) and all(k in today for k in need_keys_daily):
+                        return {
+                            "weather": now["text"],
+                            "temp_now": now["temp"],
+                            "temp_min": today["tempMin"],
+                            "temp_max": today["tempMax"],
+                            "wind_dir": now["windDir"],
+                            "sunrise": today["sunrise"],
+                            "sunset": today["sunset"]
+                        }
+            except Exception:
+                continue
+    print("❌ 全部密钥尝试之后依旧异常 code≠200，放弃推送")
     sys.exit(1)
 
 def calc_day_count(start_date):
