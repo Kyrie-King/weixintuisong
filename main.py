@@ -25,44 +25,65 @@ def get_access_token():
         sys.exit(1)
     return res["access_token"]
 
-def get_weather_all():
-    # 填入你的两个API‑KEY
+import requests
+import sys
+
+def get_weather():
+    # 在这里放入你全部的 api‑key
     key_list = [
         "2c4595bee21046ec8de24159b74b4d8d",
         "4115864138f647969ab28d83a463829a",
         "d9fd4a0ab55d4b14a45ea7ec31ecc5a8"
     ]
-    LON, LAT = "118.85", "35.06" #临沂经纬度
+    location = "118.85,35.06"  # 临沂 经度,纬度
+    
+    for api_key in key_list:
+        try:
+            # 官方 每日天气预报接口
+            url = "https://devapi.qweather.com/v7/weather/3d"
+            params = {
+                "location": location,
+                "key": api_key
+            }
+            resp = requests.get(url, params=params, timeout=15)
+            res_json = resp.json()
+            
+            # 判断接口返回成功码
+            if res_json.get("code") == "200":
+                now_url = "https://devapi.qweather.com/v7/weather/now"
+                now_resp = requests.get(now_url,params=params,timeout=15)
+                now_json = now_resp.json()
+                
+                if now_json.get("code") != "200":
+                    continue
+                
+                today_forecast = res_json["daily"][0]
+                now_info = now_json["now"]
+                
+                weather_data = {
+                    "weather": now_info["text"],
+                    "temp_now": now_info["temp"],
+                    "temp_min": today_forecast["tempMin"],
+                    "temp_max": today_forecast["tempMax"],
+                    "wind_dir": now_info["windDir"],
+                    "sunrise": today_forecast["sunrise"],
+                    "sunset": today_forecast["sunset"]
+                }
+                return weather_data
 
-    for one_key in key_list:
-        max_retry = 2
-        for attempt in range(max_retry):
-            try:
-                url_now = f"https://devapi.qweather.com/v7/weather/now?location={LON},{LAT}&key={one_key}"
-                resp_now = requests.get(url_now, timeout=15).json()
-                url_3d = f"https://devapi.qweather.com/v7/weather/3d?location={LON},{LAT}&key={one_key}"
-                resp_3d = requests.get(url_3d, timeout=15).json()
-
-                if resp_now.get("code") == "200" and resp_3d.get("code") == "200":
-                    now = resp_now["now"]
-                    today = resp_3d["daily"][0]
-                    need_keys_now = ["text", "temp", "windDir"]
-                    need_keys_daily = ["tempMin", "tempMax", "sunrise", "sunset"]
-                    if all(k in now for k in need_keys_now) and all(k in today for k in need_keys_daily):
-                        return {
-                            "weather": now["text"],
-                            "temp_now": now["temp"],
-                            "temp_min": today["tempMin"],
-                            "temp_max": today["tempMax"],
-                            "wind_dir": now["windDir"],
-                            "sunrise": today["sunrise"],
-                            "sunset": today["sunset"]
-                        }
-            except Exception:
-                continue
+        except Exception:
+            # 请求超时、网络异常则切换下一条密钥
+            continue
+    
+    # 所有密钥全部尝试完毕依旧失败，退出程序，放弃推送
     print("❌ 全部密钥尝试之后依旧异常 code≠200，放弃推送")
     sys.exit(1)
 
+
+# 调用测试
+if __name__ == "__main__":
+    data = get_weather()
+    print(data)
 def calc_day_count(start_date):
     try:
         start = datetime.strptime(start_date, "%Y-%m-%d")
