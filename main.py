@@ -6,7 +6,7 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-# ========== 读取本地 config.json 配置，无需硬编码参数 ==========
+# ========== 读取本地 config.json 配置 ==========
 try:
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -38,25 +38,44 @@ def get_access_token():
     else:
         raise Exception(f"获取token失败:{res}")
 
-# 获取高德天气，市级编码，可以拿到lives实时天气，已经彻底删除兜底数据
+# 获取高德天气
 def get_weather():
-    url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
-    retry_times = 3
-    resp = None
-    for i in range(retry_times):
+    # 第一步：base 获取实时实况 lives
+    url_live = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=base"
+    # 第二步：all 获取多日预报 forecasts
+    url_forecast = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
+
+    # 请求实况天气
+    resp_live = None
+    for i in range(3):
         try:
-            resp = requests.get(url, timeout=30, verify=False).json()
-            print("高德返回原始数据：",resp)
-            if resp.get("status") == "1" and "lives" in resp and "forecasts" in resp:
+            resp_live = requests.get(url_live, timeout=30, verify=False).json()
+            print("实况天气返回：",resp_live)
+            if resp_live.get("status") == "1" and "lives" in resp_live:
                 break
         except Exception as e:
-            print(f"第{i+1}次请求高德超时，正在重试,错误:{e}")
+            print(f"实况第{i+1}次请求失败：{e}")
             time.sleep(2)
-    if resp is None or resp["status"]!="1":
-        raise RuntimeError("高德天气接口获取失败，请检查Key、IP白名单、调用额度")
+    if resp_live is None or resp_live["status"]!="1":
+        raise RuntimeError("获取实时天气失败")
 
-    live_info = resp["lives"][0]
-    forecast_today = resp["forecasts"][0]["casts"][0]
+    # 请求每日预报
+    resp_forecast = None
+    for i in range(3):
+        try:
+            resp_forecast = requests.get(url_forecast, timeout=30, verify=False).json()
+            print("预报天气返回：",resp_forecast)
+            if resp_forecast.get("status") == "1" and "forecasts" in resp_forecast:
+                break
+        except Exception as e:
+            print(f"预报第{i+1}次请求失败：{e}")
+            time.sleep(2)
+    if resp_forecast is None or resp_forecast["status"]!="1":
+        raise RuntimeError("获取天气预报失败")
+
+
+    live_info = resp_live["lives"][0]
+    forecast_today = resp_forecast["forecasts"][0]["casts"][0]
 
     observer = ephem.Observer()
     observer.lat, observer.lon = '35.06', '118.33'
