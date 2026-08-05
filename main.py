@@ -5,70 +5,60 @@ import ephem
 from datetime import datetime, date
 from zhdate import ZhDate
 
-# 读取json配置
-def load_config():
-    with open("config.json", "r", encoding="utf‑8") as f:
-        cfg = json.load(f)
-    # GitHub Actions环境变量优先覆盖密钥
-    if "GAODE_KEY" in os.environ:
-        cfg["gaode_key"] = os.environ["GAODE_KEY"]
-    if "APP_ID" in os.environ:
-        cfg["app_id"] = os.environ["APP_ID"]
-    if "APP_SECRET" in os.environ:
-        cfg["app_secret"] = os.environ["APP_SECRET"]
-    return cfg
+# ----------------------配置----------------------
+GAODE_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
 
-config = load_config()
-
-def get_access_token():
-    url = (f"https://api.weixin.qq.com/cgi-bin/token"
-           f"?grant_type=client_credential&appid={config['app_id']}&secret={config['app_secret']}")
-    resp = requests.get(url, timeout=12).json()
-    return resp["access_token"]
-
-def calc_sunrise_sunset():
-    """河东区经纬度计算北京时间日出日落"""
-    lon = str(config["longitude"])
-    lat = str(config["latitude"])
-    observer = ephem.Observer()
-    observer.lon = lon
-    observer.lat = lat
-    observer.date = datetime.utcnow()
-    sun = ephem.Sun()
-    rise_utc = observer.next_rising(sun).datetime()
-    set_utc = observer.next_setting(sun).datetime()
-    sunrise = (rise_utc + ephem.hour * 8).strftime("%H:%M")
-    sunset = (set_utc + ephem.hour * 8).strftime("%H:%M")
-    return sunrise, sunset
-
-def get_gaode_weather():
-    url = "https://restapi.amap.com/v3/weather/weatherInfo"
-    # 这里统一4空格缩进
+def get_weather():
+    """获取临沂天气，兼容无lives实时天气兜底"""
     params = {
         "key": os.getenv("GAODE_KEY"),
         "city": "371300",
         "extensions": "all"
     }
-    res = requests.get(url, params=params, timeout=12).json()
-    #打印接口返回全部内容，方便排查
-    print("高德返回数据：",res)
-    
-    if res.get("status") != "1":
-        raise Exception(f"高德天气接口请求失败,返回:{res}")
-    live = res["lives"][0]
-    today_cast = res["forecasts"][0]["casts"][0]
-    sunrise, sunset = calc_sunrise_sunset()
+    resp = requests.get(GAODE_WEATHER_URL, params=params, timeout=15)
+    res = resp.json()
+    print("高德返回数据：", res)
+
+    if "lives" in res and len(res["lives"]) > 0:
+        live_data = res["lives"][0]
+        weather_text = (
+            f"📍{live_data['city']}\n"
+            f"☁天气：{live_data['weather']}\n"
+            f"🌡温度：{live_data['temperature']}℃\n"
+            f"💨风向：{live_data['winddirection']} 风级{live_data['windpower']}\n"
+            f"💧湿度：{live_data['humidity']}%"
+        )
+    else:
+        today = res["forecasts"][0]["casts"][0]
+        weather_text = (
+            f"📍临沂市(今日预报)\n"
+            f"☁天气：{today['dayweather']}\n"
+            f"🌡白天温度：{today['daytemp']}℃\n"
+            f"🌙夜间温度：{today['nighttemp']}℃\n"
+            f"💨风向：{today['daywind']} 风级{today['daypower']}"
+        )
+    return weather_text
+
+
+def send_wechat_message(content):
+    """微信推送消息"""
+    token = os.getenv("WECHAT_TOKEN")
+    user_id = os.getenv("WECHAT_UID")
+    url = f"https://sctapi.ftqq.com/{token}.send"
     data = {
-        "region": config["region_name"],
-        "weather": live["weather"],
-        "now_temp": live["temperature"],
-        "wind_dir": live["winddirection"],
-        "temp_low": today_cast["nighttemp"],
-        "temp_high": today_cast["daytemp"],
-        "sunrise": sunrise,
-        "sunset": sunset
+        "title": "每日天气提醒",
+        "desp": content,
+        "openid": user_id
     }
-    return data
+    requests.post(url, data=data, timeout=15)
+
+if __name__ == "__main__":
+    try:
+        weather_msg = get_weather()
+        send_wechat_message(weather_msg)
+        print("✅天气推送成功")
+    except Exception as e:
+        print(f"❌程序异常：{e}")
 
 def get_love_day_count():
     start = datetime.strptime(config["love_date"], "%Y-%m-%d").date()
