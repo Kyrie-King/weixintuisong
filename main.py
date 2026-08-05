@@ -1,4 +1,4 @@
-import os
+import json
 import requests
 from datetime import date
 import ephem
@@ -6,14 +6,21 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-# ========== 环境变量加载配置 ==========
-WX_APPID = os.getenv("APP_ID")
-WX_SECRET = os.getenv("APP_SECRET")
-GAODE_KEY = os.getenv("GAODE_KEY")
-TEMPLATE_ID = "填入你的模板id"
-USER_OPENID_LIST = ["填入接收者openid"]
-ADCODE = "371312"
-REGION = "临沂·河东区"
+# ========== 读取本地 config.json 配置，无需硬编码参数 ==========
+try:
+    with open("config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+except Exception as e:
+    print("读取config.json失败！", e)
+    exit()
+
+WX_APPID = config["app_id"]
+WX_SECRET = config["app_secret"]
+TEMPLATE_ID = config["template_id"]
+USER_OPENID_LIST = config["user"]
+GAODE_KEY = config["gaode_key"]
+ADCODE = "371300"
+REGION = "临沂市"
 
 # 纪念日配置
 love_start_date = date(2024, 6, 5)
@@ -31,7 +38,7 @@ def get_access_token():
     else:
         raise Exception(f"获取token失败:{res}")
 
-# 获取高德天气（已经移除兜底）
+# 获取高德天气，市级编码，可以拿到lives实时天气，已经彻底删除兜底数据
 def get_weather():
     url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
     retry_times = 3
@@ -67,6 +74,7 @@ def get_weather():
         "sunrise": sunrise,
         "sunset": sunset
     }
+    # 容错，防止实时气温高于当日最高预报温度
     if float(weather_data["real_temp"])>float(weather_data["max_temperature"]):
         weather_data["max_temperature"]=weather_data["real_temp"]
     return weather_data
