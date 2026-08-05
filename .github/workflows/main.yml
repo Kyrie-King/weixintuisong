@@ -1,36 +1,57 @@
-name: weixin
+name: 每日微信推送
 
 on:
-  workflow_dispatch:  # 保留手动触发，方便测试
   schedule:
-    # 北京时间每天16:00（下午4点） = UTC时间08:00
-    # cron格式: 分 时 日 月 周
-    - cron: '0 22 * * *'
+    # 每天早上 7:30 推送（北京时间，UTC+8 → UTC 23:30 前一天）
+    - cron: '30 23 * * *'
+  workflow_dispatch:  # 支持手动触发
 
 jobs:
-  build:
+  push:
     runs-on: ubuntu-latest
-    env:
-      TZ: Asia/Shanghai  # 强制设置时区为上海，避免时间误差
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # 解决Node.js 20警告
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: 设置 Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.0"
-          cache: 'pip'  # 缓存pip依赖，加速安装
+          python-version: '3.10'
 
-      - name: Set timezone to Asia/Shanghai
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 生成配置文件
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+          GAODE_KEY: ${{ secrets.GAODE_KEY }}
+          USER: ${{ secrets.USER }}
+          LOVE_DATE: ${{ secrets.LOVE_DATE }}
+          BIRTHDAY1_NAME: ${{ secrets.BIRTHDAY1_NAME }}
+          BIRTHDAY1_DATE: ${{ secrets.BIRTHDAY1_DATE }}
+          BIRTHDAY2_NAME: ${{ secrets.BIRTHDAY2_NAME }}
+          BIRTHDAY2_DATE: ${{ secrets.BIRTHDAY2_DATE }}
         run: |
-          sudo cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-          sudo timedatectl set-timezone Asia/Shanghai
-      - name: Install pip packages (清华源加速+稳定版)
-        run: |
-          python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
-          pip3 install requests zhdate -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
-      - name: Run weixin push
-        run: |
-          python3 main.py
+          cat > config.txt << 'EOF'
+          {
+              "app_id": "$APP_ID",
+              "app_secret": "$APP_SECRET",
+              "template_id": "$TEMPLATE_ID",
+              "gaode_key": "$GAODE_KEY",
+              "user": $USER,
+              "love_date": "$LOVE_DATE",
+              "birthday1": {
+                  "name": "$BIRTHDAY1_NAME",
+                  "birthday": "$BIRTHDAY1_DATE"
+              },
+              "birthday2": {
+                  "name": "$BIRTHDAY2_NAME",
+                  "birthday": "$BIRTHDAY2_DATE"
+              }
+          }
+          EOF
+
+      - name: 执行推送
+        run: python main.py
