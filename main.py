@@ -52,6 +52,7 @@ def send_wechat_message(content):
     }
     requests.post(url, data=data, timeout=15)
 
+
 if __name__ == "__main__":
     try:
         weather_msg = get_weather()
