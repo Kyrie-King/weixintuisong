@@ -21,8 +21,8 @@ def read_config():
     return config
 
 conf = read_config()
-APPID = conf["APPID"]
-APPSECRET = conf["APPSECRET"]
+APPID = conf["app_id"]
+APPSECRET = conf["app_secret"]
 OPENID = conf["OPENID"]
 REGION = conf["region"]
 SAYING = conf["saying"]
@@ -37,7 +37,7 @@ HE_DONG_LAT = "35.08"
 
 # --------------------------获取access_token 原版代码原样保留--------------------------
 def get_access_token():
-    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={app_id}&secret={app_secret}"
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={APPSECRET}"
     res = requests.get(url).json()
     return res["access_token"]
 
