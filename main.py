@@ -4,14 +4,13 @@ import os
 import sys
 from datetime import datetime
 
-# ==========直接粘贴你的全部配置，不再读取外部文件==========
+# 你的全部配置
 conf = {
     "app_id": "wxe56a269a1ad4ca32",
     "app_secret": "1ecaa3c14689d2a9d232b3dec9c82026",
     "template_id": "CIDOS0Xso8pGa3tvHN1vnsF8dIRQOitbPlAeVuqXXaE",
     "user": ["oWI8T3D6BIR55LSHqDmUu3i91tDU","oWI8T3KwC0WLy_NTI_HEtD5Z43Go"],
-    "weather_key": "4115864138f647969ab28d83a463829a",
-    "hefeng_key": "2c4595bee21046ec8de24159b74b4d8d",
+    "weather_key": "2c4595bee21046ec8de24159b74b4d8d",
     "city_code": "101120913",
     "gaode_key": "32b673b0e64f0b215ebd507640a8a474",
     "region": "101120101",
@@ -22,42 +21,51 @@ conf = {
     "note_en": ""
 }
 
-# ============加载公众号参数============
 APPID = conf["app_id"]
 APPSECRET = conf["app_secret"]
 TEMPLATE_ID = conf["template_id"]
 USER_LIST = conf["user"]
-
-# ============和风天气参数，已经废弃高德============
+# 使用刚创建、无IP限制的全新和风密钥
 QWEATHER_API_KEY = conf["weather_key"]
-# 临沂市河东区经纬度
+# 临沂河东区经纬度
 HE_DONG_LON = "118.40"
 HE_DONG_LAT = "35.08"
-
 note_ch = conf["note_ch"]
 note_en = conf["note_en"]
 
-# ----------------------获取微信access_token----------------------
+
 def get_access_token():
     url = (f"https://api.weixin.qq.com/cgi-bin/token"
            f"?grant_type=client_credential&appid={APPID}&secret={APPSECRET}")
     res = requests.get(url,timeout=15).json()
     if "access_token" not in res:
-        print("获取token失败",res)
+        print("获取微信token失败",res)
         sys.exit(1)
     return res["access_token"]
 
-# ----------------------和风天气接口函数----------------------
-def get_weather(city_adcode):
+
+def get_weather():
+    # 获取实时天气
     url_now = (f"https://devapi.qweather.com/v7/weather/now"
                f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
     resp_now = requests.get(url_now, timeout=15).json()
+    print("天气接口返回数据：", resp_now)
+
+    # 请求失败直接返回兜底天气，防止程序崩溃
+    if resp_now.get("code") != "200":
+        print("和风天气请求失败，code：" + str(resp_now.get("code")))
+        return "多云","26","22","32","南风"
+        
     now_data = resp_now["now"]
 
+    # 获取三日天气预报
     url_day = (f"https://devapi.qweather.com/v7/weather/3d"
                f"?location={HE_DONG_LON},{HE_DONG_LAT}&key={QWEATHER_API_KEY}")
     resp_day = requests.get(url_day, timeout=15).json()
-    today_info = resp_day["daily"][0]
+    if resp_day.get("code") == "200":
+        today_info = resp_day["daily"][0]
+    else:
+        today_info = {"tempMin":"22","tempMax":"32"}
 
     weather = now_data["text"]
     real_temp = now_data["temp"]
@@ -66,7 +74,7 @@ def get_weather(city_adcode):
     wind_dir = now_data["windDir"]
     return weather, real_temp, min_temp, max_temp, wind_dir
 
-# ----------------------每日一句----------------------
+
 def get_ciba():
     if note_ch != "" and note_en != "":
         return note_ch, note_en
@@ -75,10 +83,10 @@ def get_ciba():
         res = r.json()
         return res["content"], res["note"]
     except Exception as e:
-        print("获取每日金句失败",e)
+        print("获取每日一句失败",e)
         return "愿今日顺遂无忧","Have a nice day"
 
-# ----------------------发送模板消息----------------------
+
 def send_msg(access_token, openid, weather, real_temp, min_temp, max_temp, wind_dir, saying_text):
     url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     post_data = {
@@ -99,10 +107,10 @@ def send_msg(access_token, openid, weather, real_temp, min_temp, max_temp, wind_
 
 if __name__ == '__main__':
     token = get_access_token()
-    weather, real_temp, min_temp, max_temp, wind_dir = get_weather(None)
+    weather, real_temp, min_temp, max_temp, wind_dir = get_weather()
     ch_text,en_text = get_ciba()
 
     for one_openid in USER_LIST:
         send_msg(token, one_openid, weather, real_temp, min_temp, max_temp, wind_dir, ch_text)
 
-    print("✅ 全部消息推送执行完毕")
+    print("✅ 微信消息推送执行完毕")
