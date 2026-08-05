@@ -49,8 +49,11 @@ def get_gaode_weather():
         "extensions": "all"
     }
     res = requests.get(url, params=params, timeout=12).json()
+    #打印接口返回全部内容，方便排查
+    print("高德返回数据：",res)
+    
     if res.get("status") != "1":
-        raise Exception("高德天气接口请求失败")
+        raise Exception(f"高德天气接口请求失败,返回:{res}")
     live = res["lives"][0]
     today_cast = res["forecasts"][0]["casts"][0]
     sunrise, sunset = calc_sunrise_sunset()
