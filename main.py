@@ -1,9 +1,9 @@
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, date
 import ephem
 
-# ========== 加载配置文件 ==========
+# ========== 加载配置文件 config.json ==========
 try:
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -21,6 +21,10 @@ REGION = config["region"]
 
 print(f"【调试信息】已读取到 app_id = {WX_APPID}")
 
+# ---------------------- 配置纪念日、生日 ----------------------
+love_start_date = date(2024, 6, 5)      # 相恋起始日期
+jiaojiao_birth = date(2004, 12, 5)     # 娇娇生日
+zhangzhe_birth = date(2004, 10, 12)    # 张喆生日
 
 # ========== 获取微信access_token ==========
 def get_access_token():
@@ -33,58 +37,95 @@ def get_access_token():
     else:
         raise Exception(f"获取token失败:{res}")
 
-
-# ========== 获取高德天气预报（指定获取预报数据） ==========
+# ========== 获取高德实时天气+预报天气 ==========
 def get_weather():
-    # parameters=all 获取全部预报，一定会返回 forecasts
+    # extensions=all 返回实况 + 多天预报
     url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={GAODE_KEY}&extensions=all"
     resp = requests.get(url, timeout=15).json()
     print("高德返回数据：", resp)
-    today_info = resp["forecasts"][0]["casts"][0]
-    weather_data = {
-        "region": REGION,
-        "weather": today_info["dayweather"],
-        "temp_low": today_info["nighttemp"],
-        "temp_high": today_info["daytemp"],
-        "wind_dir": f'{today_info["daywind"]}风 {today_info["daypower"]}级'
-    }
-    # 临沂经纬度日出日落
+    
+    live_info = resp["lives"][0]          # 实时天气
+    forecast_today = resp["forecasts"][0]["casts"][0] # 今日预报
+
+    # 临沂经纬度计算日出日落
     observer = ephem.Observer()
     observer.lat, observer.lon = '35.06', '118.33'
     sun = ephem.Sun()
     sunrise = observer.next_rising(sun).datetime().strftime("%H:%M")
     sunset = observer.next_setting(sun).datetime().strftime("%H:%M")
-    weather_data["sunrise"] = sunrise
-    weather_data["sunset"] = sunset
+
+    weather_data = {
+        "city": REGION,
+        "weather": forecast_today["dayweather"],
+        "real_temp": live_info["temperature"],
+        "min_temperature": forecast_today["nighttemp"],
+        "max_temperature": forecast_today["daytemp"],
+        "wind_direction": f"{forecast_today['daywind']}风 {forecast_today['daypower']}级",
+        "sunrise": sunrise,
+        "sunset": sunset
+    }
     return weather_data
 
+# ========== 计算相恋天数、生日剩余天数 ==========
+def calc_day_num():
+    today = date.today()
+    # 在一起天数
+    love_day = (today - love_start_date).days
 
-# ========== 发送微信模板消息 ==========
-def send_wx_template(access_token, openid, weather):
+    # 获取下一次生日倒计时
+    def get_next_birthday(birth):
+        try:
+            next_b = date(today.year, birth.month, birth.day)
+            if next_b < today:
+                next_b = date(today.year + 1, birth.month, birth.day)
+        except ValueError:
+            # 处理2‑29闰年
+            next_b = date(today.year+1, birth.month, birth.day)
+        return (next_b - today).days
+
+    rem_jj = get_next_birthday(jiaojiao_birth)
+    rem_zz = get_next_birthday(zhangzhe_birth)
+    birthday1 = f"距离娇娇的生日还有{rem_jj}天"
+    birthday2 = f"距离张喆的生日还有{rem_zz}天"
+
+    now_date_str = today.strftime("%Y-%m-%d 星期三")
+    return now_date_str, love_day, birthday1, birthday2
+
+
+# ========== 发送微信模板消息（键完全匹配你的模板） ==========
+def send_wx_template(access_token, openid, weather, date_str, love_day, b1, b2):
     api_url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}"
     post_data = {
         "touser": openid,
         "template_id": TEMPLATE_ID,
         "data": {
-            "region": {"value": weather["region"]},
+            "date": {"value": date_str},
+            "city": {"value": weather["city"]},
             "weather": {"value": weather["weather"]},
-            "temp": {"value": f'{weather["temp_low"]}~{weather["temp_high"]}℃'},
-            "wind": {"value": weather["wind_dir"]},
-            "rise": {"value": weather["sunrise"]},
-            "set": {"value": weather["sunset"]}
+            "real_temp": {"value": weather["real_temp"]},
+            "min_temperature": {"value": weather["min_temperature"]},
+            "max_temperature": {"value": weather["max_temperature"]},
+            "wind_direction": {"value": weather["wind_direction"]},
+            "sunrise": {"value": weather["sunrise"]},
+            "sunset": {"value": weather["sunset"]},
+            "love_day": {"value": love_day},
+            "birthday1": {"value": b1},
+            "birthday2": {"value": b2}
         }
     }
     result = requests.post(api_url, json=post_data).json()
     print(f"推送用户{openid}返回结果：{result}")
 
 
-# ========== 主入口 ==========
+# ========== 程序入口 ==========
 if __name__ == "__main__":
     token = get_access_token()
     weather_info = get_weather()
+    date_text, together_days, info_birth1, info_birth2 = calc_day_num()
+
     for openid in USER_OPENID_LIST:
-        send_wx_template(token, openid, weather_info)
-    print("✅ 微信模板消息推送完毕")
+        send_wx_template(token, openid, weather_info, date_text, together_days, info_birth1, info_birth2)
+    print("✅ 娇娇专属推送执行完毕")
 
 
 def get_love_day_count():
